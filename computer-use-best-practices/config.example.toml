@@ -5,6 +5,9 @@
 #
 # Only set the fields you want to change; everything else keeps its default.
 
+# provider = "kimi"
+# api_base_url = "https://api.kimi.com/coding/"
+
 # enable_computer_use_tools = true
 # enable_browser_use_tools  = true
 # enable_editor_tool        = true

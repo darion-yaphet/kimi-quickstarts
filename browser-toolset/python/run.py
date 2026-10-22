@@ -1,21 +1,21 @@
-"""Run Claude's browser toolset from the command line, with the example driver.
+"""Run Kimi Code with ordinary browser tools backed by the example CDP driver.
 
 Usage:
 
     python run.py "Open example.com and tell me the heading"
 
-It builds the example driver, hands it to the tool runner, and prints each of the model's messages until the model
-finishes. It uses only the SDK's abstract toolset, so any other driver swaps in the same way.
+It builds the example driver, exposes its actions as ordinary custom tools, and prints each model response until the
+model finishes.
 
 Requires: `pip install -r requirements.txt`, `cdp_browser.py` next to this file, a Chromium binary (`CHROME_PATH`, or
-`google-chrome` / `chromium` on `PATH`) and an API key in `ANTHROPIC_API_KEY`.
+`google-chrome` / `chromium` on `PATH`) and a Kimi Code API key in `ANTHROPIC_API_KEY`.
 
 Read "Running a browser toolset safely" in the SDK guide (browser-toolset.md) before running this against anything
 other than a throwaway browser profile inside a sandbox, because the pages the model visits affect what it does next.
 
 Environment: `ALLOWED_DOMAINS` (comma-separated hosts the model may visit, subdomains included; default
-`example.com,iana.org`), `HEADLESS=0` to watch the browser, `CHROME_PATH` for a specific Chromium binary, `MODEL` to
-pick the model.
+`example.com,iana.org`), `HEADLESS=0` to watch the browser, `CHROME_PATH` for a specific Chromium binary,
+`ANTHROPIC_BASE_URL`, `MODEL`, and `MAX_TOOL_TURNS`.
 """
 
 from __future__ import annotations
@@ -31,6 +31,7 @@ from anthropic.tools import ToolError
 from anthropic.tools.browser import BetaURLContext, BetaURLPolicy
 
 from cdp_browser import CdpBrowser
+from kimi_adapter import run_loop
 
 
 def env_list(name: str, default: str) -> list[str]:
@@ -68,7 +69,10 @@ def main() -> None:
     args = parser.parse_args()
     task = " ".join(args.task) or "Open example.com and tell me the page heading."
     try:
-        client = Anthropic()
+        client = Anthropic(
+            api_key=os.environ.get("ANTHROPIC_API_KEY"),
+            base_url=os.environ.get("ANTHROPIC_BASE_URL", "https://api.kimi.com/coding/"),
+        )
         browser = CdpBrowser(
             headless=os.environ.get("HEADLESS", "1") != "0",
             url_policy=example_policy(env_list("ALLOWED_DOMAINS", "example.com,iana.org")),
@@ -76,17 +80,14 @@ def main() -> None:
     except (AnthropicError, OSError, RuntimeError, ToolError) as error:  # no SDK profile, or no usable Chromium
         print(f"error: {error}", file=sys.stderr)
         sys.exit(1)
-    # This script closes the browser, not the tool runner.
-    # The `with` closes it when the loop ends, fails or exits early.
     with browser:
-        runner = client.beta.messages.tool_runner(
-            model=os.environ.get("MODEL", "claude-sonnet-5-5"),
-            max_tokens=1024,
-            tools=[browser],
-            messages=[{"role": "user", "content": task}],
+        run_loop(
+            client,
+            browser,
+            task,
+            model=os.environ.get("MODEL", "kimi-for-coding"),
+            max_turns=int(os.environ.get("MAX_TOOL_TURNS", "20")),
         )
-        for message in runner:
-            print(message)
 
 
 if __name__ == "__main__":

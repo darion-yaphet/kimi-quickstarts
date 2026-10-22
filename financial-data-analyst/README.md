@@ -1,12 +1,12 @@
-# Claude Financial Data Analyst
+# Kimi Financial Data Analyst
 
 ![hero](public/hero.png)
 
-A sophisticated Next.js application that combines Claude's capabilities with interactive data visualization to analyze financial data via chat.
+A Next.js application that combines Kimi Code with interactive data visualization to analyze financial data via chat.
 
 ## Features
 
-- **Intelligent Data Analysis**: Powered by Claude (Using Claude Haiku 4.5 & Claude Sonnet 5.5)
+- **Intelligent Data Analysis**: Powered by Kimi Code through its Anthropic-compatible API
 - **Multi-Format File Upload Support**:
   - Text/Code files (.txt, .md, .html, .py, .csv, etc)
   - PDF documents (Regular PDF with text, scanned documents not supported)
@@ -24,14 +24,14 @@ A sophisticated Next.js application that combines Claude's capabilities with int
 ### Prerequisites
 
 - Node.js 18+ installed
-- Claude API key (For Claude integration)
+- Kimi Code API key
 
 ### Installation
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/anthropics/anthropic-quickstarts.git
-cd anthropic-quickstarts/financial-data-analyst
+git clone https://github.com/darion-yaphet/kimi-quickstarts.git
+cd kimi-quickstarts/financial-data-analyst
 ```
 
 2. Install dependencies:
@@ -41,7 +41,9 @@ npm install
 
 3. Create a `.env.local` file in the root directory:
 ```env
-ANTHROPIC_API_KEY=your_api_key_here
+ANTHROPIC_API_KEY=your_kimi_code_api_key
+ANTHROPIC_BASE_URL=https://api.kimi.com/coding/
+NEXT_PUBLIC_ANTHROPIC_MODEL=kimi-for-coding
 ```
 
 4. Run the development server:
@@ -64,7 +66,11 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 - **Backend**:
   - Next.js API Routes
   - Edge Runtime
-  - Anthropic SDK
+  - Anthropic SDK pointed at Kimi Code's compatible endpoint
+
+For overseas accounts, set `ANTHROPIC_BASE_URL` to
+`https://api.kimi.ai/coding/`. `NEXT_PUBLIC_ANTHROPIC_MODEL` controls the
+initial model shown in the browser; it contains a model ID, never a secret.
 
 ## Usage Examples
 

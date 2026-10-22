@@ -1,0 +1,70 @@
+name: Kimi compatibility
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  portable-python:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        directory: [browser-toolset/python, computer-toolset/python, managed-agents]
+        include:
+          - directory: managed-agents
+            test-directory: tests
+    defaults:
+      run:
+        working-directory: ${{ matrix.directory }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install -r requirements.txt
+      - run: python -m unittest discover -s '${{ matrix.test-directory || "." }}' -p 'test_*.py' -v
+  agent-config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install anthropic mcp
+      - run: python -m unittest agents.test_kimi_config agents.test_portable_tools
+      - run: python -m unittest discover -s autonomous-coding -p test_kimi_config.py
+      - run: python autonomous-coding/test_security.py
+      - run: bash -n scripts/kimi-run
+  typescript-tools:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        directory: [browser-toolset/typescript, computer-toolset/typescript]
+    defaults:
+      run:
+        working-directory: ${{ matrix.directory }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm install --no-audit --no-fund
+      - run: npm run typecheck
+  web-build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        directory: [customer-support-agent, financial-data-analyst]
+    defaults:
+      run:
+        working-directory: ${{ matrix.directory }}
+    env:
+      ANTHROPIC_API_KEY: build-placeholder
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build

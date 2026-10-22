@@ -1,6 +1,9 @@
-# Autonomous Coding Agent Demo
+# Kimi Autonomous Coding Agent Demo
 
-A minimal harness demonstrating long-running autonomous coding with the Claude Agent SDK. This demo implements a two-agent pattern (initializer + coding agent) that can build complete applications over multiple sessions.
+A minimal harness demonstrating long-running autonomous coding with Kimi Code
+through the Claude Agent SDK. The SDK and Claude Code CLI remain the local
+agent runtime; their model requests are forwarded to Kimi's
+Anthropic-compatible endpoint.
 
 ## Prerequisites
 
@@ -20,10 +23,19 @@ claude --version  # Should be latest version
 pip show claude-code-sdk  # Check SDK is installed
 ```
 
-**API Key:** Set your Anthropic API key:
+**API configuration:** copy `.env.example` into your shell configuration or
+export the required values for the current terminal:
+
 ```bash
-export ANTHROPIC_API_KEY='your-api-key-here'
+export ANTHROPIC_API_KEY='your-kimi-code-api-key'
+export ANTHROPIC_BASE_URL='https://api.kimi.com/coding/'
+export ANTHROPIC_MODEL='kimi-for-coding'
 ```
+
+The harness fills Claude Code's Opus, Sonnet, Haiku, Fable, and subagent model
+variables from the selected model when they are not already set. It also sets
+matching context limits. For an overseas account, use
+`https://api.kimi.ai/coding/`.
 
 ## Quick Start
 
@@ -131,7 +143,7 @@ The application will typically be available at `http://localhost:3000` or simila
 |--------|-------------|---------|
 | `--project-dir` | Directory for the project | `./autonomous_demo_project` |
 | `--max-iterations` | Max agent iterations | Unlimited |
-| `--model` | Claude model to use | `claude-sonnet-4-5-20250929` |
+| `--model` | Kimi model to use | `$ANTHROPIC_MODEL` or `kimi-for-coding` |
 
 ## Customization
 
@@ -157,6 +169,12 @@ The agent tried to run a command not in the allowlist. This is the security syst
 
 **"API key not set"**
 Ensure `ANTHROPIC_API_KEY` is exported in your shell environment.
+
+**"Model not found" or background tasks fail**
+Keep `ANTHROPIC_MODEL`, `ANTHROPIC_DEFAULT_*_MODEL`, and
+`CLAUDE_CODE_SUBAGENT_MODEL` on valid Kimi model IDs. See `.env.example` for a
+complete set. `k3-256k` uses a 262144-token context; the default
+`kimi-for-coding` uses a 1048576-token context.
 
 ## License
 

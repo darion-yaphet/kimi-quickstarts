@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Kimi Quickstarts Local Sessions</title>
+    <style>
+      :root { color-scheme: light dark; font: 15px/1.45 system-ui, sans-serif; }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: #111827; color: #e5e7eb; }
+      button, input, select, textarea { font: inherit; }
+      button, input, select, textarea { border: 1px solid #4b5563; border-radius: 8px; padding: .65rem; background: #1f2937; color: inherit; }
+      button { cursor: pointer; }
+      button:hover { background: #374151; }
+      button:disabled { cursor: wait; opacity: .55; }
+      header { padding: 1rem 1.25rem; border-bottom: 1px solid #374151; }
+      header h1 { margin: 0 0 .25rem; font-size: 1.2rem; }
+      header p { margin: 0; color: #fbbf24; }
+      main { display: grid; grid-template-columns: minmax(240px, 320px) 1fr; height: calc(100vh - 86px); }
+      aside { padding: 1rem; border-right: 1px solid #374151; overflow: auto; }
+      aside label { display: block; margin: 0 0 .35rem; color: #9ca3af; }
+      aside select, aside input { width: 100%; margin-bottom: .75rem; }
+      .new-row { display: grid; grid-template-columns: 1fr auto; gap: .5rem; }
+      #profile-status { margin: .75rem 0 1rem; color: #9ca3af; }
+      #sessions { display: grid; gap: .45rem; }
+      .session { text-align: left; width: 100%; }
+      .session.active { border-color: #60a5fa; background: #1e3a5f; }
+      .session small { display: block; color: #9ca3af; }
+      section { display: grid; grid-template-rows: 1fr auto; min-width: 0; }
+      #messages { overflow: auto; padding: 1.25rem; }
+      .message { max-width: 760px; padding: .8rem 1rem; margin: 0 0 .8rem; border-radius: 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
+      .message.user { margin-left: auto; background: #1d4ed8; }
+      .message.assistant { background: #1f2937; }
+      .message.error { border: 1px solid #b91c1c; color: #fecaca; }
+      .message small { display: block; margin-bottom: .3rem; opacity: .7; }
+      #composer { display: grid; grid-template-columns: 1fr auto; gap: .75rem; padding: 1rem; border-top: 1px solid #374151; }
+      #composer textarea { min-height: 72px; resize: vertical; }
+      #notice { min-height: 1.5rem; padding: 0 1rem; color: #fca5a5; }
+      @media (max-width: 720px) {
+        main { display: block; height: auto; }
+        aside { border-right: 0; border-bottom: 1px solid #374151; }
+        section { min-height: 65vh; }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Kimi Quickstarts · Local Sessions</h1>
+      <p>Legacy UIs and external connectors remain pending. This page cannot post to Slack, Linear, Sentry, or other services.</p>
+    </header>
+    <main>
+      <aside>
+        <label for="profile">Profile</label>
+        <select id="profile"></select>
+        <div id="profile-status"></div>
+        <label for="title">New session title</label>
+        <div class="new-row">
+          <input id="title" value="New session" maxlength="120">
+          <button id="create" type="button">Create</button>
+        </div>
+        <h2>Persisted sessions</h2>
+        <div id="sessions"></div>
+      </aside>
+      <section>
+        <div id="messages"></div>
+        <div id="notice" role="status"></div>
+        <form id="composer">
+          <textarea id="message" required maxlength="100000" placeholder="Send a message to the selected local session"></textarea>
+          <button id="send" type="submit">Send</button>
+        </form>
+      </section>
+    </main>
+    <script>
+      const profileSelect = document.querySelector('#profile');
+      const profileStatus = document.querySelector('#profile-status');
+      const sessionsNode = document.querySelector('#sessions');
+      const messagesNode = document.querySelector('#messages');
+      const notice = document.querySelector('#notice');
+      const titleInput = document.querySelector('#title');
+      const messageInput = document.querySelector('#message');
+      const createButton = document.querySelector('#create');
+      const sendButton = document.querySelector('#send');
+      let profiles = new Map();
+      let activeSession = null;
+
+      async function request(path, options = {}) {
+        const response = await fetch(path, options);
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.details || payload.error || `HTTP ${response.status}`);
+        return payload;
+      }
+
+      function setNotice(message = '') { notice.textContent = message; }
+
+      function element(tag, text, className) {
+        const node = document.createElement(tag);
+        if (text !== undefined) node.textContent = text;
+        if (className) node.className = className;
+        return node;
+      }
+
+      function showProfileStatus() {
+        const profile = profiles.get(profileSelect.value);
+        profileStatus.textContent = profile ? profile.integration_status : '';
+      }
+
+      async function loadProfiles() {
+        const payload = await request('/v1/profiles');
+        profiles = new Map(payload.profiles.map((profile) => [profile.name, profile]));
+        for (const profile of payload.profiles) {
+          const option = element('option', profile.name);
+          option.value = profile.name;
+          profileSelect.append(option);
+        }
+        showProfileStatus();
+      }
+
+      async function loadSessions() {
+        const payload = await request(`/v1/sessions?profile=${encodeURIComponent(profileSelect.value)}`);
+        sessionsNode.replaceChildren();
+        for (const session of payload.sessions) {
+          const button = element('button', undefined, `session${session.id === activeSession ? ' active' : ''}`);
+          button.type = 'button';
+          button.append(element('span', session.title));
+          button.append(element('small', `${session.status} · ${new Date(session.updated_at).toLocaleString()}`));
+          button.addEventListener('click', () => selectSession(session.id));
+          sessionsNode.append(button);
+        }
+      }
+
+      async function selectSession(sessionId) {
+        activeSession = sessionId;
+        setNotice();
+        const payload = await request(`/v1/sessions/${encodeURIComponent(sessionId)}/events`);
+        messagesNode.replaceChildren();
+        for (const event of payload.events) {
+          if (event.type === 'message') {
+            const message = element('article', undefined, `message ${event.role}`);
+            message.append(element('small', event.role));
+            message.append(element('div', event.content || ''));
+            messagesNode.append(message);
+          } else if (event.type === 'error') {
+            const message = element('article', undefined, 'message error');
+            message.append(element('small', 'error'));
+            message.append(element('div', event.metadata.message || 'Provider error'));
+            messagesNode.append(message);
+          }
+        }
+        messagesNode.scrollTop = messagesNode.scrollHeight;
+        await loadSessions();
+      }
+
+      async function createSession() {
+        createButton.disabled = true;
+        setNotice();
+        try {
+          const payload = await request('/v1/sessions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ profile: profileSelect.value, title: titleInput.value }),
+          });
+          await selectSession(payload.session.id);
+          messageInput.focus();
+        } catch (error) {
+          setNotice(error.message);
+        } finally {
+          createButton.disabled = false;
+        }
+      }
+
+      document.querySelector('#composer').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (!activeSession) return setNotice('Create or select a session first.');
+        const content = messageInput.value.trim();
+        if (!content) return;
+        sendButton.disabled = true;
+        setNotice('Waiting for Kimi…');
+        try {
+          await request(`/v1/sessions/${encodeURIComponent(activeSession)}/messages`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content }),
+          });
+          messageInput.value = '';
+          setNotice();
+          await selectSession(activeSession);
+        } catch (error) {
+          await selectSession(activeSession);
+          setNotice(error.message);
+        } finally {
+          sendButton.disabled = false;
+        }
+      });
+
+      createButton.addEventListener('click', createSession);
+      profileSelect.addEventListener('change', async () => {
+        activeSession = null;
+        messagesNode.replaceChildren();
+        showProfileStatus();
+        await loadSessions();
+      });
+
+      (async () => {
+        try {
+          await loadProfiles();
+          await loadSessions();
+        } catch (error) {
+          setNotice(error.message);
+        }
+      })();
+    </script>
+  </body>
+</html>

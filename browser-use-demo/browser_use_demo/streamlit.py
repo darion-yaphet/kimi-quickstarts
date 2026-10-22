@@ -7,7 +7,6 @@ import base64
 import io
 import json
 import os
-import time
 import traceback
 import zipfile
 from datetime import datetime
@@ -22,13 +21,24 @@ from browser_use_demo.message_renderer import MessageRenderer, Sender
 from browser_use_demo.tools import ToolResult
 
 PROVIDER_TO_DEFAULT_MODEL_NAME: dict[APIProvider, str] = {
+    APIProvider.KIMI: os.environ.get("KIMI_MODEL", "kimi-for-coding"),
     APIProvider.ANTHROPIC: "claude-sonnet-4-5-20250929",
     APIProvider.BEDROCK: "anthropic.claude-sonnet-4-5-20250929-v1:0",
     APIProvider.VERTEX: "claude-sonnet-4-5@20250929",
 }
 
-CONFIG_DIR = PosixPath("~/.anthropic").expanduser()
-API_KEY_FILE = CONFIG_DIR / "api_key"
+PROVIDER_TO_MODELS: dict[APIProvider, list[str]] = {
+    APIProvider.KIMI: [
+        os.environ.get("KIMI_MODEL", "kimi-for-coding"),
+        "kimi-for-coding-highspeed",
+    ],
+    APIProvider.ANTHROPIC: ["claude-sonnet-4-5-20250929"],
+    APIProvider.BEDROCK: ["anthropic.claude-sonnet-4-5-20250929-v1:0"],
+    APIProvider.VERTEX: ["claude-sonnet-4-5@20250929"],
+}
+
+KIMI_API_KEY_FILE = PosixPath("~/.kimi/api_key").expanduser()
+ANTHROPIC_API_KEY_FILE = PosixPath("~/.anthropic/api_key").expanduser()
 
 STREAMLIT_STYLE = """
 <style>
@@ -49,12 +59,57 @@ STREAMLIT_STYLE = """
 </style>
 """
 
-# Claude 4.5 models for browser automation
-BROWSER_COMPATIBLE_MODELS = [
-    "claude-sonnet-4-5-20250929",
-    "claude-opus-4-5-20251101",
-    "claude-haiku-4-5-20251001",
-]
+# Kimi models for browser automation
+BROWSER_COMPATIBLE_MODELS = PROVIDER_TO_MODELS[APIProvider.KIMI]
+
+
+def _read_key_file(path: PosixPath) -> str:
+    try:
+        return path.read_text(encoding="utf-8").strip()
+    except (FileNotFoundError, OSError):
+        return ""
+
+
+def _provider_api_key(provider: APIProvider) -> str:
+    if provider == APIProvider.KIMI:
+        return (
+            os.environ.get("KIMI_API_KEY", "").strip()
+            or os.environ.get("ANTHROPIC_API_KEY", "").strip()
+            or _read_key_file(KIMI_API_KEY_FILE)
+        )
+    if provider == APIProvider.ANTHROPIC:
+        return os.environ.get("ANTHROPIC_API_KEY", "").strip() or _read_key_file(
+            ANTHROPIC_API_KEY_FILE
+        )
+    return ""
+
+
+def _provider_base_url(provider: APIProvider) -> str:
+    if provider == APIProvider.KIMI:
+        return os.environ.get(
+            "KIMI_BASE_URL",
+            os.environ.get("ANTHROPIC_BASE_URL", "https://api.kimi.com/coding/"),
+        )
+    return ""
+
+
+def handle_provider_change(state=None) -> None:
+    """Reset provider-bound credentials and conversation state."""
+    state = st.session_state if state is None else state
+    provider = state.provider
+    if getattr(state, "credential_provider", None) == provider:
+        return
+
+    state.api_key = _provider_api_key(provider)
+    state.base_url = _provider_base_url(provider)
+    state.model = PROVIDER_TO_DEFAULT_MODEL_NAME[provider]
+    state.credential_provider = provider
+    state.messages = []
+    state.tools = {}
+    state.rendered_message_count = 0
+    state.active_messages = []
+    state.last_error = None
+    state.chat_disabled = False
 
 
 def setup_state():
@@ -71,8 +126,10 @@ def setup_state():
         "rendered_message_count": 0,  # Track rendered messages to avoid re-rendering
         "last_error": None,  # Store last error message to display persistently
         # API Configuration
-        "api_key": os.environ.get("ANTHROPIC_API_KEY", ""),
-        "provider": APIProvider.ANTHROPIC,
+        "provider": APIProvider.KIMI,
+        "credential_provider": APIProvider.KIMI,
+        "api_key": lambda: _provider_api_key(st.session_state.provider),
+        "base_url": lambda: _provider_base_url(st.session_state.provider),
         "max_tokens": 8192,
         "model": lambda: PROVIDER_TO_DEFAULT_MODEL_NAME[st.session_state.provider],
         # Runtime State
@@ -416,9 +473,14 @@ def _format_message_content(content, include_images: bool = False):
 
 def authenticate():
     """Handle API key authentication."""
-    if st.session_state.provider == APIProvider.ANTHROPIC:
+    if st.session_state.provider in {APIProvider.KIMI, APIProvider.ANTHROPIC}:
         if not st.session_state.api_key:
-            st.error("Please provide your Anthropic API key in the sidebar")
+            provider_name = getattr(
+                st.session_state.provider, "value", str(st.session_state.provider)
+            )
+            st.error(
+                f"Please provide an API key for {provider_name} in the sidebar"
+            )
             st.stop()
     return True
 
@@ -495,6 +557,7 @@ async def run_agent(user_input: str):
             tool_output_callback=tool_output_callback,
             api_response_callback=api_response_callback,
             api_key=st.session_state.api_key,
+            base_url=st.session_state.base_url,
             max_tokens=st.session_state.max_tokens,
             browser_tool=st.session_state.browser_tool,  # Pass persistent browser instance
             only_n_most_recent_images=3,  # Keep only 3 most recent screenshots for context
@@ -531,7 +594,7 @@ async def run_agent(user_input: str):
 def main():
     """Main application entry point."""
     st.set_page_config(
-        page_title="Claude Browser Use Demo",
+        page_title="Kimi Browser Use Demo",
         page_icon="🌐",
         layout="wide"
     )
@@ -545,26 +608,34 @@ def main():
     with st.sidebar:
         st.header("⚙️ Configuration")
 
-        # API Provider (fixed to Anthropic for browser use)
+        # This fork defaults to Kimi's Anthropic-compatible Messages API.
         st.selectbox(
             "API Provider",
-            options=[APIProvider.ANTHROPIC],
+            options=list(APIProvider),
             index=0,
             key="provider",
-            disabled=True,
-            help="Browser Use requires Anthropic API",
+            on_change=handle_provider_change,
+            help="Switching provider clears credentials and conversation history.",
         )
 
-        # Model selection (only browser-compatible models)
-        st.selectbox("Model", options=BROWSER_COMPATIBLE_MODELS, index=0, key="model")
+        # Model selection follows the active provider.
+        st.selectbox(
+            "Model",
+            options=PROVIDER_TO_MODELS[st.session_state.provider],
+            index=0,
+            key="model",
+        )
 
         # API Key
         st.text_input(
-            "Anthropic API Key",
+            "API Key",
             type="password",
             value=st.session_state.api_key,
             key="api_key",
-            help="Get your API key from https://console.anthropic.com",
+            help=(
+                "Kimi Code keys: https://www.kimi.com/code/console. "
+                "Credentials are isolated per provider."
+            ),
         )
 
         # Max tokens
@@ -679,10 +750,10 @@ def main():
             st.rerun()
 
     # Main chat interface
-    st.title("🌐 Claude Browser Use Demo")
+    st.title("🌐 Kimi Browser Use Demo")
     st.markdown(
-        "This demo showcases Claude's ability to interact with web browsers using "
-        "Playwright automation. Ask Claude to navigate websites, fill forms, "
+        "This demo showcases Kimi's ability to interact with web browsers using "
+        "Playwright automation. Ask Kimi to navigate websites, fill forms, "
         "extract information, and more!"
     )
 
@@ -719,11 +790,11 @@ def main():
 
     # Show status when chat is disabled
     if st.session_state.chat_disabled:
-        st.info("🤖 Claude is currently processing your request. Please wait...")
+        st.info("🤖 Kimi is currently processing your request. Please wait...")
 
     # Simple chat input with disabled state
     prompt = st.chat_input(
-        "Ask Claude to browse the web...",
+        "Ask Kimi to browse the web...",
         disabled=st.session_state.chat_disabled,
         on_submit=disable_chat_callback
     )

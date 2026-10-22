@@ -170,6 +170,7 @@ def mock_asyncio_loop():
 def mock_environment(monkeypatch):
     """Mock environment variables for testing."""
     env_vars = {
+        "KIMI_API_KEY": "test-kimi-api-key",
         "ANTHROPIC_API_KEY": "test-api-key",
     }
 
@@ -184,6 +185,7 @@ def clean_environment(monkeypatch):
     """Remove environment variables for testing missing env scenarios."""
     keys_to_remove = [
         "ANTHROPIC_API_KEY",
+        "KIMI_API_KEY",
     ]
 
     for key in keys_to_remove:
@@ -196,6 +198,7 @@ def clean_environment(monkeypatch):
 def mock_provider():
     """Mock APIProvider enum."""
     with patch("browser_use_demo.loop.APIProvider") as mock:
+        mock.KIMI = "kimi"
         mock.ANTHROPIC = "anthropic"
         mock.BEDROCK = "bedrock"
         mock.VERTEX = "vertex"

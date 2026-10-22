@@ -11,7 +11,7 @@ import json
 from typing import Any
 
 import anthropic
-import httpx
+import httpx2 as httpx
 import pytest
 
 import constants
@@ -153,3 +153,21 @@ def test_dated_fallback_end_to_end(monkeypatch, gui_calls):
     assert result["tool_use_id"] == "t1" and not result["is_error"]
     assert "toolset_name" not in result
     assert gui_calls == ["moveTo", "click"]
+
+
+def test_kimi_uses_explicit_tools_and_standard_messages(monkeypatch, gui_calls):
+    (headers, first), (_, second) = _run_loop(
+        monkeypatch, provider="kimi", first_turn=DATED_TURN
+    )
+
+    (tool,) = first["tools"]
+    assert tool["name"] == "computer"
+    assert tool["input_schema"]["type"] == "object"
+    assert "anthropic-beta" not in headers
+    assert "context_management" not in first
+    assert "thinking" not in first
+    assert "output_config" not in first
+    assert "cache_control" not in first["system"][0]
+
+    (result,) = second["messages"][2]["content"]
+    assert result["tool_use_id"] == "t1" and not result["is_error"]

@@ -2,7 +2,6 @@
 Sampling loop for browser automation with Claude
 """
 
-import os
 from collections.abc import Callable
 from datetime import datetime
 from enum import StrEnum
@@ -29,6 +28,7 @@ PROMPT_CACHING_BETA_FLAG = "prompt-caching-2024-07-31"
 
 
 class APIProvider(StrEnum):
+    KIMI = "kimi"
     ANTHROPIC = "anthropic"
     BEDROCK = "bedrock"
     VERTEX = "vertex"
@@ -75,8 +75,9 @@ async def sampling_loop(
         [httpx.Request | None, httpx.Response | object | None, Exception | None], None
     ],
     api_key: str,
+    base_url: str | None = None,
     only_n_most_recent_images: int | None = None,
-    max_tokens: int = 4096,
+    max_tokens: int = 8192,
     browser_tool: Optional[BrowserTool] = None,
 ):
     """
@@ -103,7 +104,13 @@ async def sampling_loop(
         betas = []
         enable_prompt_caching = False
 
-        if provider == APIProvider.ANTHROPIC:
+        if provider == APIProvider.KIMI:
+            client = Anthropic(
+                api_key=api_key,
+                base_url=base_url or "https://api.kimi.com/coding/",
+                max_retries=4,
+            )
+        elif provider == APIProvider.ANTHROPIC:
             client = Anthropic(api_key=api_key, max_retries=4)
             enable_prompt_caching = True
         elif provider == APIProvider.VERTEX:
@@ -144,13 +151,20 @@ async def sampling_loop(
 
         api_response_callback(None, response, None)
 
+        if getattr(response, "stop_reason", None) == "max_tokens":
+            raise RuntimeError(
+                "Model response reached max_tokens before completing the browser turn; "
+                "increase Max Output Tokens and retry."
+            )
+
         # Process response using our new abstractions
         processor = ResponseProcessor()
         processed = processor.process_response(response)
 
-        # Output all content blocks to callbacks
+        # Signed thinking is retained for API replay but not shown in the UI.
         for content_block in processed.assistant_content:
-            output_callback(content_block)
+            if content_block.get("type") in {"text", "tool_use"}:
+                output_callback(content_block)
 
         # Build and append the complete assistant message (preserves text + tools)
         builder = MessageBuilder()

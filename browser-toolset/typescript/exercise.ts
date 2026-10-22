@@ -7,8 +7,8 @@
  *     npx tsx exercise.ts
  *
  * The script serves a small page on localhost, launches the example driver with a URL policy that admits that page and
- * nothing else, and sends the toolset the `tool_use` calls a model would send, through `browser.toolResult()`, which
- * runs the same pipeline as the tool runner. It prints each `tool_result` as the model would see it, then checks it:
+ * nothing else, and sends the `tool_use` calls a model would send through the Kimi dispatch adapter. It prints each
+ * `tool_result` as the model would see it, then checks it:
  *
  * - `navigate` to the page, `read_page`, `left_click` on a `ref_N` from the read and `get_page_text` showing what the
  *   click did: all answered;
@@ -34,6 +34,7 @@ import type {
   BetaToolResultContentBlockParam,
 } from '@anthropic-ai/sdk/resources/beta';
 import { CdpBrowser } from './cdp-browser.js';
+import { dispatch, portableContent } from './kimi-adapter.js';
 
 const PAGE = `<!doctype html>
 <title>Exercise page</title>
@@ -63,13 +64,8 @@ async function call(
   name: string,
   input: Record<string, unknown>,
 ): Promise<BetaToolResultBlockParam> {
-  const result = await browser.toolResult({
-    type: 'tool_use',
-    id: `toolu_${name}`,
-    name,
-    input,
-    toolset_name: 'browser',
-  });
+  const result = await dispatch(browser, `toolu_${name}`, name, input);
+  result.content = portableContent(result);
   console.log(`\n${name} ${JSON.stringify(input)} -> ${result.is_error ? 'refused' : 'answered'}`);
   for (const block of blocksOf(result)) console.log('  ' + JSON.stringify(block));
   return result;

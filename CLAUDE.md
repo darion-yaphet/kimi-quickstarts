@@ -1,10 +1,18 @@
-# Claude Quickstarts Development Guide
+# Kimi Quickstarts Development Guide
+
+This is the Kimi fork at `darion-yaphet/kimi-quickstarts`. Default model calls
+to `https://api.kimi.com/coding/` with `kimi-for-coding`, configurable through
+the environment. Use the shared `scripts/kimi-run` launcher from the repository
+root. Keep all real credentials in ignored local environment files. Preserve
+the upstream license and attribution. Anthropic SDK types are protocol helpers;
+Claude-only hosted tools and services need an explicit Kimi implementation.
 
 ## Conventions (all quickstarts)
 
 - Name Anthropic SDK client instances `client` — e.g. `const client = new Anthropic();` in TypeScript, `client = Anthropic()` in Python. This applies to source files and code snippets in READMEs and guides alike.
 - Never use the "CMA" acronym. Write "Managed Agents" or "Claude Managed Agents" in prose and comments, and spell it out in identifiers, file names, and log prefixes (e.g. `managed-agents.ts`, not `cma.ts`; `[managed-agent]`, not `[cma]`).
-- Tag every Managed Agent a quickstart creates with `metadata.anthropic_cookbook` set to `claude-quickstarts/<quickstart-directory>` (e.g. `claude-quickstarts/chat-sdk`), in `agent.yaml`, `ant apply` frontmatter, or the `agents.create` call. This is how we see which quickstarts people run. Use lowercase letters, digits, and hyphens only, because a value in any other shape is ignored for attribution, with no error to warn you. Sessions inherit the tag from their agent, so session metadata needs nothing.
+- Do not create Anthropic-hosted agents as part of a Kimi path. Keep legacy
+  hosted examples clearly labeled until their local replacements are complete.
 
 ## Legal
 

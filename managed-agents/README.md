@@ -2,6 +2,65 @@
 
 Projects built on [Claude Managed Agents](https://platform.claude.com/docs/en/managed-agents/overview): agents Anthropic runs for you, with server-side sessions, sandboxed tools, and an event stream your app consumes. Each quickstart is a complete, runnable app that pairs Managed Agents with a real product surface.
 
+## Local Kimi migration
+
+Kimi Code provides an Anthropic-compatible **Messages API**, but it does not
+host Claude Managed Agents resources. Pointing the examples below at a Kimi
+Base URL does not provide `beta.agents`, `beta.sessions`, vaults, dreams, cron,
+OAuth, hosted tools, or managed sandboxes.
+
+This fork includes [kimi.py](kimi.py), a small local replacement for the part
+that can be migrated honestly: profile-aware chat with persistent SQLite
+sessions and an append-only event history. It supports every quickstart name as
+a profile and exposes both a CLI and a loopback HTTP API. It never sends Slack
+messages, edits Linear issues, reads Sentry, launches host commands, schedules
+jobs, or fetches the web.
+
+```bash
+cd managed-agents
+python -m pip install -r requirements.txt
+export ANTHROPIC_API_KEY='your-kimi-code-api-key'
+export ANTHROPIC_BASE_URL='https://api.kimi.com/coding/'
+export ANTHROPIC_MODEL='kimi-for-coding'
+
+# Interactive, persisted local conversation
+python kimi.py --profile slack
+
+# One message; prints the local session and event as JSON
+python kimi.py --profile roadtrip-planner --message 'Plan a two-day trip'
+
+# Inspect migration status without a key or network call
+python kimi.py --profile sentry --status
+```
+
+To use the local HTTP API:
+
+```bash
+python kimi.py --serve
+
+curl -s http://127.0.0.1:8765/v1/profiles
+curl -s -X POST http://127.0.0.1:8765/v1/sessions \
+  -H 'content-type: application/json' \
+  -d '{"profile":"assistant-ui","title":"Local analysis"}'
+```
+
+Open `http://127.0.0.1:8765/` for the included local browser UI. It can select
+profiles, create and reopen persisted sessions, replay event history, and send
+messages. It uses only same-origin requests and renders all session/model text
+through DOM `textContent`; it has no external scripts, styles, fonts, or CDNs.
+
+The service binds to `127.0.0.1` by default and has no authentication. Its
+database defaults to `managed-agents/.kimi/sessions.db`. See
+[KIMI_MIGRATION.md](KIMI_MIGRATION.md) for endpoints, profile status, and the
+work still required to connect each original product surface. The existing UIs
+and webhook bridges continue to document the original hosted implementation;
+they are not presented as connected to this local runtime.
+
+The loopback server requires JSON POST bodies and rejects foreign browser
+origins and non-loopback `Host` headers. Model calls have a configurable
+timeout; truncated `max_tokens` responses become error events rather than
+successful partial replies.
+
 ## Quickstarts
 
 - **[assistant-ui/](assistant-ui/)** puts a spreadsheet analyst in a

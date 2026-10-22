@@ -2,7 +2,6 @@
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import Image from "next/image";
 import { Moon, Sun, Check } from "lucide-react";
 import { useTheme } from "next-themes";
 import { themes } from "@/styles/themes";
@@ -88,12 +87,7 @@ const TopNavBar = () => {
   return (
     <nav className="text-foreground p-4 flex justify-between items-center">
       <div className="font-bold text-xl flex gap-2 items-center">
-        <Image
-          src={theme === "dark" ? "/wordmark-dark.svg" : "/wordmark.svg"}
-          alt="Company Wordmark"
-          width={112}
-          height={20}
-        />
+        <span>Kimi Support</span>
       </div>
       <div className="flex items-center gap-2">
         <DropdownMenu>
@@ -139,7 +133,7 @@ const TopNavBar = () => {
           </DropdownMenuContent>
         </DropdownMenu>
         <Link
-          href="https://github.com/anthropics/anthropic-quickstarts"
+          href="https://github.com/darion-yaphet/kimi-quickstarts"
           target="_blank"
           rel="noopener noreferrer"
         >

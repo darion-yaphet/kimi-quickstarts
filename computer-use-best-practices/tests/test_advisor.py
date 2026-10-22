@@ -91,7 +91,7 @@ def test_advisor_prompt_addendum_gated() -> None:
         mp.setattr(constants, "cfg", off)
         mp.setattr(cli, "cfg", off)
         assert "advisor" not in cli.build_system_prompt(None).lower()
-        on = constants.cfg.with_overrides(enable_advisor_tool=True)
+        on = constants.cfg.with_overrides(provider="anthropic", enable_advisor_tool=True)
         mp.setattr(constants, "cfg", on)
         mp.setattr(cli, "cfg", on)
         assert "advisor" in cli.build_system_prompt(None).lower()

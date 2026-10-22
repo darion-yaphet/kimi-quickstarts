@@ -7,9 +7,24 @@ from constants import Config, _coerce
 
 def test_defaults() -> None:
     c = Config()
+    assert c.provider == "kimi"
+    assert c.api_base_url == "https://api.kimi.com/coding/"
+    assert c.enable_autocompaction is False
     assert c.jpeg_quality == 75
     assert c.enable_advisor_tool is False
     assert c.browser_viewport == (1456, 819)
+
+
+def test_kimi_disables_claude_hosted_features() -> None:
+    c = Config(
+        provider="kimi",
+        use_hosted_computer_tool=True,
+        enable_advisor_tool=True,
+        enable_autocompaction=True,
+    )
+    assert c.hosted_computer == "explicit"
+    assert c.enable_advisor_tool is False
+    assert c.enable_autocompaction is False
 
 
 def test_coerce_primitives() -> None:
@@ -28,6 +43,7 @@ def test_load_from_toml(tmp_path) -> None:
     p = tmp_path / "c.toml"
     p.write_text(
         textwrap.dedent("""
+        provider = "anthropic"
         jpeg_quality = 90
         enable_advisor_tool = true
         browser_viewport = [1024, 768]
@@ -73,6 +89,8 @@ def test_coerce_dict_field_from_string_errors_clearly() -> None:
     "provider,hosted,expected",
     [
         ("anthropic", False, "explicit"),
+        ("kimi", False, "explicit"),
+        ("kimi", True, "explicit"),
         ("vertex", False, "explicit"),
         ("anthropic", True, "toolset"),
         # The toolset is first-party only; other providers keep the dated tool.

@@ -12,6 +12,7 @@ recoverable API errors with backoff, recovers from empty responses, and nudges
 the model toward batch tools when it issues a lone single-action call.
 """
 
+import os
 import random
 import sys
 import time
@@ -184,14 +185,14 @@ def _strip_advisor(messages: list[MessageParam]) -> None:
         content = msg.get("content")
         if not isinstance(content, list):
             continue
-        msg["content"] = [
+        msg["content"] = cast(Any, [
             b
             for b in content
             if getattr(b, "type", None) not in {"server_tool_use", "advisor_tool_result"}
             and not (
                 isinstance(b, dict) and b.get("type") in {"server_tool_use", "advisor_tool_result"}
             )
-        ]
+        ])
 
 
 def _is_empty_response(content: list[Any]) -> bool:
@@ -224,6 +225,12 @@ def _make_client(provider: Provider) -> AnthropicClient:
 
     if provider == "bedrock":
         return AnthropicBedrock()
+
+    if provider == "kimi":
+        return anthropic.Anthropic(
+            api_key=os.environ.get("ANTHROPIC_API_KEY"),
+            base_url=os.environ.get("ANTHROPIC_BASE_URL", cfg.api_base_url),
+        )
 
     return anthropic.Anthropic()
 
@@ -397,14 +404,15 @@ def sampling_loop(
     list stays API-valid.
     """
     client = _make_client(cfg.provider)
-    system: list[TextBlockParam] = [
-        {"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}
-    ]
+    system_block: dict[str, Any] = {"type": "text", "text": system_prompt}
+    if cfg.provider != "kimi":
+        system_block["cache_control"] = {"type": "ephemeral"}
+    system: list[TextBlockParam] = [cast(TextBlockParam, system_block)]
     messages: list[MessageParam] = []
 
     if thinking_effort is None:
         thinking_effort = cfg.thinking_effort.get(model, cfg.default_thinking_effort)
-    effort_kwargs = _effort_kwargs(model, thinking_effort)
+    effort_kwargs = {} if cfg.provider == "kimi" else _effort_kwargs(model, thinking_effort)
 
     hosted_computer = cfg.hosted_computer
     client_tool_params: list[Any] = list(tools.to_params(hosted_computer=hosted_computer))
@@ -425,7 +433,8 @@ def sampling_loop(
         for _ in range(max_iters):
             turn += 1
 
-            _truncate_to_last_compaction(messages)
+            if cfg.provider != "kimi":
+                _truncate_to_last_compaction(messages)
             prune(messages)
             if (
                 advisor_enabled
@@ -434,7 +443,8 @@ def sampling_loop(
             ):
                 _strip_advisor(messages)
                 advisor_enabled = False
-            _set_trailing_cache_control(messages)
+            if cfg.provider != "kimi":
+                _set_trailing_cache_control(messages)
 
             render.turn_header(turn)
 

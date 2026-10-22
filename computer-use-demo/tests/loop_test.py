@@ -11,6 +11,7 @@ from anthropic.types.beta import (
 )
 
 from computer_use_demo.loop import (
+    KIMI_DEFAULT_BASE_URL,
     PROMPT_CACHING_BETA_FLAG,
     APIProvider,
     sampling_loop,
@@ -33,7 +34,8 @@ async def test_loop():
         mock.Mock(spec=BetaMessage, content=[TextBlock(type="text", text="Done!")]),
     ]
 
-    tool_collection = mock.AsyncMock()
+    tool_collection = mock.Mock()
+    tool_collection.run = mock.AsyncMock()
     tool_collection.run.return_value = mock.Mock(
         output="Tool output", error=None, base64_image=None
     )
@@ -90,12 +92,15 @@ async def _run_loop_and_get_request_kwargs(**loop_kwargs):
         mock.Mock(spec=BetaMessage, content=[TextBlock(type="text", text="Done!")]),
     ]
 
+    tool_collection = mock.Mock()
+    tool_collection.run = mock.AsyncMock()
+
     with (
         mock.patch("computer_use_demo.loop.Anthropic", return_value=client),
         mock.patch("computer_use_demo.loop.AnthropicVertex", return_value=client),
         mock.patch("computer_use_demo.loop.AnthropicBedrock", return_value=client),
         mock.patch(
-            "computer_use_demo.loop.ToolCollection", return_value=mock.AsyncMock()
+            "computer_use_demo.loop.ToolCollection", return_value=tool_collection
         ),
     ):
         defaults = {
@@ -153,6 +158,136 @@ async def test_loop_toolset_on_anthropic_keeps_prompt_caching_beta():
     assert kwargs["betas"] == [PROMPT_CACHING_BETA_FLAG]
 
 
+async def test_kimi_uses_stable_messages_and_portable_tool_schemas():
+    client = mock.Mock()
+    client.messages.with_raw_response.create.return_value = mock.Mock()
+    client.messages.with_raw_response.create.return_value.parse.return_value = (
+        mock.Mock(spec=BetaMessage, content=[TextBlock(type="text", text="Done!")])
+    )
+    tool_collection = mock.Mock()
+    tool_collection.run = mock.AsyncMock()
+    tool_collection.to_params.return_value = [
+        {"name": "computer", "type": "computer_20250124"},
+        {"name": "bash", "type": "bash_20250124"},
+        {
+            "name": "str_replace_based_edit_tool",
+            "type": "text_editor_20250728",
+        },
+    ]
+
+    with (
+        mock.patch(
+            "computer_use_demo.loop.Anthropic", return_value=client
+        ) as anthropic,
+        mock.patch(
+            "computer_use_demo.loop.ToolCollection", return_value=tool_collection
+        ),
+        mock.patch.dict("os.environ", {"WIDTH": "1024", "HEIGHT": "768"}, clear=True),
+    ):
+        await sampling_loop(
+            model="kimi-for-coding",
+            provider=APIProvider.KIMI,
+            system_prompt_suffix="",
+            messages=[{"role": "user", "content": "Test message"}],
+            output_callback=mock.Mock(),
+            tool_output_callback=mock.Mock(),
+            api_response_callback=mock.Mock(),
+            api_key="test-key",
+            tool_version="computer_use_20250124",
+            thinking_mode="adaptive",
+            token_efficient_tools_beta=True,
+        )
+
+    anthropic.assert_called_once_with(
+        api_key="test-key", base_url=KIMI_DEFAULT_BASE_URL, max_retries=4
+    )
+    client.beta.messages.with_raw_response.create.assert_not_called()
+    kwargs = client.messages.with_raw_response.create.call_args.kwargs
+    assert set(kwargs) == {"max_tokens", "messages", "model", "system", "tools"}
+    assert [tool["name"] for tool in kwargs["tools"]] == [
+        "computer",
+        "bash",
+        "str_replace_based_edit_tool",
+    ]
+    assert all("input_schema" in tool for tool in kwargs["tools"])
+    assert all("type" not in tool for tool in kwargs["tools"])
+    assert (
+        "scroll" in kwargs["tools"][0]["input_schema"]["properties"]["action"]["enum"]
+    )
+
+
+async def test_kimi_replays_thinking_and_returns_screenshot_to_tool_call():
+    client = mock.Mock()
+    client.messages.with_raw_response.create.return_value = mock.Mock()
+    thinking = mock.Mock(type="thinking")
+    thinking.model_dump.return_value = {
+        "type": "thinking",
+        "thinking": "I should inspect the desktop.",
+        "signature": "kimi-signature",
+    }
+    client.messages.with_raw_response.create.return_value.parse.side_effect = [
+        mock.Mock(
+            spec=BetaMessage,
+            content=[
+                thinking,
+                ToolUseBlock(
+                    type="tool_use",
+                    id="tool-1",
+                    name="computer",
+                    input={"action": "screenshot"},
+                ),
+            ],
+        ),
+        mock.Mock(spec=BetaMessage, content=[TextBlock(type="text", text="Done!")]),
+    ]
+    tool_collection = mock.Mock()
+    tool_collection.run = mock.AsyncMock()
+    tool_collection.to_params.return_value = [{"type": "computer_toolset_20260801"}]
+    tool_collection.run.return_value = mock.Mock(
+        output=None, error=None, base64_image="cG5n"
+    )
+
+    with (
+        mock.patch("computer_use_demo.loop.Anthropic", return_value=client),
+        mock.patch(
+            "computer_use_demo.loop.ToolCollection", return_value=tool_collection
+        ),
+    ):
+        result = await sampling_loop(
+            model="kimi-for-coding",
+            provider=APIProvider.KIMI,
+            system_prompt_suffix="",
+            messages=[{"role": "user", "content": "Inspect the desktop"}],
+            output_callback=mock.Mock(),
+            tool_output_callback=mock.Mock(),
+            api_response_callback=mock.Mock(),
+            api_key="test-key",
+            tool_version="computer_toolset_20260801",
+        )
+
+    assistant_content = cast(list[dict[str, Any]], result[1]["content"])
+    assert assistant_content[0] == {
+        "type": "thinking",
+        "thinking": "I should inspect the desktop.",
+        "signature": "kimi-signature",
+    }
+    tool_results = cast(list[dict[str, Any]], result[2]["content"])
+    assert "toolset_name" not in tool_results[0]
+    assert tool_results[0]["content"] == [
+        {
+            "type": "image",
+            "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "cG5n",
+            },
+        }
+    ]
+    tool_collection.run.assert_called_once_with(
+        name="screenshot", tool_input={}, toolset_name="computer"
+    )
+
+
 async def test_loop_toolset_member_calls_run_sequentially_and_stop_on_failure():
     client = mock.Mock()
     client.beta.messages.with_raw_response.create.return_value = mock.Mock()
@@ -196,7 +331,8 @@ async def test_loop_toolset_member_calls_run_sequentially_and_stop_on_failure():
         mock.Mock(spec=BetaMessage, content=[TextBlock(type="text", text="Done!")]),
     ]
 
-    tool_collection = mock.AsyncMock()
+    tool_collection = mock.Mock()
+    tool_collection.run = mock.AsyncMock()
     tool_collection.run.side_effect = [
         mock.Mock(output="Pressed key: super", error=None, base64_image=None),
         mock.Mock(output=None, error="xdotool failed", base64_image=None),

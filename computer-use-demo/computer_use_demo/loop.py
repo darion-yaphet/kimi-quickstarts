@@ -2,6 +2,7 @@
 Agentic sampling loop that calls the Claude API and local implementation of anthropic-defined computer use tools.
 """
 
+import os
 import platform
 from collections.abc import Callable
 from datetime import datetime
@@ -18,6 +19,7 @@ from anthropic import (
     APIStatusError,
     omit,
 )
+from anthropic.types import Message, MessageParam, ToolParam
 from anthropic.types.beta import (
     BetaCacheControlEphemeralParam,
     BetaContentBlockParam,
@@ -60,7 +62,11 @@ ThinkingEffort = Literal["low", "medium", "high", "max"]
 class APIProvider(StrEnum):
     ANTHROPIC = "anthropic"
     BEDROCK = "bedrock"
+    KIMI = "kimi"
     VERTEX = "vertex"
+
+
+KIMI_DEFAULT_BASE_URL = "https://api.kimi.com/coding/"
 
 
 # This system prompt is optimized for the Docker environment in this repository and
@@ -124,6 +130,14 @@ async def sampling_loop(
         if provider == APIProvider.ANTHROPIC:
             client = Anthropic(api_key=api_key, max_retries=4)
             enable_prompt_caching = True
+        elif provider == APIProvider.KIMI:
+            client = Anthropic(
+                api_key=api_key,
+                base_url=os.getenv("KIMI_BASE_URL")
+                or os.getenv("ANTHROPIC_BASE_URL")
+                or KIMI_DEFAULT_BASE_URL,
+                max_retries=4,
+            )
         elif provider == APIProvider.VERTEX:
             client = AnthropicVertex()
         elif provider == APIProvider.BEDROCK:
@@ -145,7 +159,12 @@ async def sampling_loop(
                 min_removal_threshold=image_truncation_threshold,
             )
         extra_body = {}
-        if thinking_mode == "adaptive":
+        if provider == APIProvider.KIMI:
+            # Kimi's Anthropic-compatible endpoint accepts the stable Messages
+            # API and ordinary custom tools.  Claude beta headers, prompt
+            # caching and explicit thinking controls are intentionally omitted.
+            pass
+        elif thinking_mode == "adaptive":
             # Newer models (Claude Opus 4.6 / Sonnet 4.6 and later) reason
             # adaptively: the model decides how much to think and the effort
             # level steers it. These models do not accept a manual token budget.
@@ -165,17 +184,31 @@ async def sampling_loop(
         # implementation may be able call the SDK directly with:
         # `response = client.messages.create(...)` instead.
         try:
-            raw_response = client.beta.messages.with_raw_response.create(
-                max_tokens=max_tokens,
-                messages=messages,
-                model=model,
-                system=[system],
-                tools=tool_collection.to_params(),
-                # The toolset group has no beta flag, so on Vertex/Bedrock the
-                # list can be empty; omit the header rather than send it blank.
-                betas=betas or omit,
-                extra_body=extra_body,
-            )
+            if provider == APIProvider.KIMI:
+                raw_response = client.messages.with_raw_response.create(
+                    max_tokens=max_tokens,
+                    messages=cast(list[MessageParam], messages),
+                    model=model,
+                    system=[system],
+                    tools=cast(
+                        list[ToolParam],
+                        _to_kimi_tool_params(
+                            tool_collection.to_params(), tool_version=tool_version
+                        ),
+                    ),
+                )
+            else:
+                raw_response = client.beta.messages.with_raw_response.create(
+                    max_tokens=max_tokens,
+                    messages=messages,
+                    model=model,
+                    system=[system],
+                    tools=tool_collection.to_params(),
+                    # The toolset group has no beta flag, so on Vertex/Bedrock the
+                    # list can be empty; omit the header rather than send it blank.
+                    betas=betas or omit,
+                    extra_body=extra_body,
+                )
         except (APIStatusError, APIResponseValidationError) as e:
             api_response_callback(e.request, e.response, e)
             return messages
@@ -189,7 +222,9 @@ async def sampling_loop(
 
         response = raw_response.parse()
 
-        response_params = _response_to_params(response)
+        response_params = _response_to_params(
+            response, exclude_none=provider == APIProvider.KIMI
+        )
         messages.append(
             {
                 "role": "assistant",
@@ -213,20 +248,37 @@ async def sampling_loop(
                     str | None,
                     cast(dict[str, Any], content_block).get("toolset_name"),
                 )
-                if toolset_name is not None and member_call_failed:
+                dispatch_name = tool_use_block["name"]
+                dispatch_input = cast(dict[str, Any], tool_use_block.get("input", {}))
+                dispatch_toolset_name = toolset_name
+                if (
+                    provider == APIProvider.KIMI
+                    and tool_version == "computer_toolset_20260801"
+                    and tool_use_block["name"] == "computer"
+                ):
+                    # The GA Claude toolset is represented as one ordinary
+                    # discriminator-based custom tool on the wire, then routed
+                    # back to the local member implementation without leaking
+                    # Claude's toolset_name extension into Kimi messages.
+                    dispatch_toolset_name = "computer"
+                    dispatch_name = cast(str, dispatch_input["action"])
+                    dispatch_input = {
+                        key: value
+                        for key, value in dispatch_input.items()
+                        if key != "action"
+                    }
+                if dispatch_toolset_name is not None and member_call_failed:
                     # Toolset member calls run sequentially in block order and
                     # stop on the first failure; the remaining member calls
                     # are answered without being executed.
                     result: ToolResult = ToolFailure(error=NOT_EXECUTED_ERROR)
                 else:
                     result = await tool_collection.run(
-                        name=tool_use_block["name"],
-                        tool_input=cast(
-                            dict[str, Any], tool_use_block.get("input", {})
-                        ),
-                        toolset_name=toolset_name,
+                        name=dispatch_name,
+                        tool_input=dispatch_input,
+                        toolset_name=dispatch_toolset_name,
                     )
-                    if toolset_name is not None and result.error:
+                    if dispatch_toolset_name is not None and result.error:
                         member_call_failed = True
                 tool_result_content.append(
                     _make_api_tool_result(
@@ -239,6 +291,130 @@ async def sampling_loop(
             return messages
 
         messages.append({"content": tool_result_content, "role": "user"})
+
+
+def _to_kimi_tool_params(
+    tool_params: list[Any], *, tool_version: ToolVersion
+) -> list[dict[str, Any]]:
+    """Translate Anthropic-defined tools into portable custom-tool schemas."""
+    portable_tools: list[dict[str, Any]] = []
+    for tool in tool_params:
+        tool_dict = cast(dict[str, Any], tool)
+        tool_type = cast(str, tool_dict.get("type", ""))
+        if tool_type.startswith("computer_"):
+            portable_tools.append(_kimi_computer_tool(tool_version))
+        elif tool_dict.get("name") == "bash":
+            portable_tools.append(
+                {
+                    "name": "bash",
+                    "description": "Run a command in a persistent bash shell, or restart the shell.",
+                    "input_schema": {
+                        "type": "object",
+                        "properties": {
+                            "command": {"type": "string"},
+                            "restart": {"type": "boolean", "default": False},
+                        },
+                        "additionalProperties": False,
+                    },
+                }
+            )
+        elif tool_dict.get("name") == "str_replace_based_edit_tool":
+            portable_tools.append(
+                {
+                    "name": "str_replace_based_edit_tool",
+                    "description": "View, create, and edit files using absolute paths.",
+                    "input_schema": {
+                        "type": "object",
+                        "properties": {
+                            "command": {
+                                "type": "string",
+                                "enum": ["view", "create", "str_replace", "insert"],
+                            },
+                            "path": {"type": "string"},
+                            "file_text": {"type": "string"},
+                            "view_range": {
+                                "type": "array",
+                                "items": {"type": "integer"},
+                                "minItems": 2,
+                                "maxItems": 2,
+                            },
+                            "old_str": {"type": "string"},
+                            "new_str": {"type": "string"},
+                            "insert_line": {"type": "integer"},
+                            "insert_text": {"type": "string"},
+                        },
+                        "required": ["command", "path"],
+                        "additionalProperties": False,
+                    },
+                }
+            )
+    return portable_tools
+
+
+def _kimi_computer_tool(tool_version: ToolVersion) -> dict[str, Any]:
+    actions = [
+        "key",
+        "type",
+        "mouse_move",
+        "left_click",
+        "left_click_drag",
+        "right_click",
+        "middle_click",
+        "double_click",
+        "screenshot",
+        "cursor_position",
+    ]
+    if tool_version != "computer_use_20241022":
+        actions.extend(
+            [
+                "left_mouse_down",
+                "left_mouse_up",
+                "scroll",
+                "hold_key",
+                "wait",
+                "triple_click",
+            ]
+        )
+    if tool_version in ("computer_use_20251124", "computer_toolset_20260801"):
+        actions.append("zoom")
+
+    coordinate = {
+        "type": "array",
+        "items": {"type": "integer", "minimum": 0},
+        "minItems": 2,
+        "maxItems": 2,
+    }
+    return {
+        "name": "computer",
+        "description": (
+            "Control the desktop with mouse and keyboard actions and take screenshots. "
+            "Use screenshot to inspect the current display before acting."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "action": {"type": "string", "enum": actions},
+                "text": {"type": "string"},
+                "coordinate": coordinate,
+                "start_coordinate": coordinate,
+                "scroll_direction": {
+                    "type": "string",
+                    "enum": ["up", "down", "left", "right"],
+                },
+                "scroll_amount": {"type": "integer", "minimum": 0},
+                "duration": {"type": "number", "minimum": 0},
+                "key": {"type": "string"},
+                "region": {
+                    "type": "array",
+                    "items": {"type": "integer", "minimum": 0},
+                    "minItems": 4,
+                    "maxItems": 4,
+                },
+            },
+            "required": ["action"],
+            "additionalProperties": False,
+        },
+    }
 
 
 def _maybe_filter_to_n_most_recent_images(
@@ -291,7 +467,9 @@ def _maybe_filter_to_n_most_recent_images(
 
 
 def _response_to_params(
-    response: BetaMessage,
+    response: BetaMessage | Message,
+    *,
+    exclude_none: bool = False,
 ) -> list[BetaContentBlockParam]:
     res: list[BetaContentBlockParam] = []
     for block in response.content:
@@ -309,7 +487,12 @@ def _response_to_params(
                 res.append(cast(BetaContentBlockParam, thinking_block))
         else:
             # Handle tool use blocks normally
-            res.append(cast(BetaToolUseBlockParam, block.model_dump()))
+            res.append(
+                cast(
+                    BetaToolUseBlockParam,
+                    block.model_dump(exclude_none=exclude_none),
+                )
+            )
     return res
 
 

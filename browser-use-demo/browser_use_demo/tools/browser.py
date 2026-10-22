@@ -234,7 +234,7 @@ class BrowserTool(BaseAnthropicTool):
 
         if self._initialized:
             print(
-                f"[Browser] Reusing existing browser instance",
+                "[Browser] Reusing existing browser instance",
                 file=sys.stderr,
                 flush=True,
             )
@@ -248,7 +248,7 @@ class BrowserTool(BaseAnthropicTool):
 
         if not self._initialized:
             print(
-                f"[Browser] Initializing browser for first time",
+                "[Browser] Initializing browser for first time",
                 file=sys.stderr,
                 flush=True,
             )
@@ -309,7 +309,7 @@ class BrowserTool(BaseAnthropicTool):
                     flush=True,
                 )
                 print(
-                    f"[Browser] New browser instance created",
+                    "[Browser] New browser instance created",
                     file=sys.stderr,
                     flush=True,
                 )
@@ -914,13 +914,18 @@ Source element: <{result.get("source", "unknown")}>
             else:
                 dom_tree_json = json.dumps(dom_tree, indent=2)
 
-            # Try to use Anthropic API if available
-            api_key = os.environ.get("ANTHROPIC_API_KEY")
+            # Use the configured Anthropic-compatible Messages API if available.
+            api_key = os.environ.get("KIMI_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")
             if api_key:
                 try:
                     from anthropic import AsyncAnthropic
 
-                    client = AsyncAnthropic(api_key=api_key)
+                    client = AsyncAnthropic(
+                        api_key=api_key,
+                        base_url=os.environ.get(
+                            "ANTHROPIC_BASE_URL", "https://api.kimi.com/coding/"
+                        ),
+                    )
 
                     prompt = f"""You are helping find elements on a web page. The user wants to find: "{search_query}"
 
@@ -946,10 +951,15 @@ FOUND: 0
 ERROR: explanation of why no elements were found"""
 
                     response = await client.messages.create(
-                        model="claude-sonnet-5-5",
-                        max_tokens=800,
+                        model=os.environ.get("KIMI_MODEL", "kimi-for-coding"),
+                        max_tokens=4096,
                         messages=[{"role": "user", "content": prompt}],
                     )
+
+                    if response.stop_reason == "max_tokens":
+                        raise RuntimeError(
+                            "element search response reached max_tokens before completion"
+                        )
 
                     # Handle the response properly
                     first_content = response.content[0]
@@ -1036,7 +1046,7 @@ ERROR: explanation of why no elements were found"""
 
             # For simple fallback, just report count (no ref_ids without AI analysis)
             return ToolResult(
-                output=f"Found {len(elements)} matching element{'s' if len(elements) != 1 else ''} (Note: AI-based search with ref_ids requires ANTHROPIC_API_KEY)",
+                output=f"Found {len(elements)} matching element{'s' if len(elements) != 1 else ''} (Note: AI-based search with ref_ids requires KIMI_API_KEY)",
                 error=None,
             )
 

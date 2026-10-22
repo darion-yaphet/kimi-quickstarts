@@ -104,7 +104,7 @@ async def run_autonomous_agent(
 
     Args:
         project_dir: Directory for the project
-        model: Claude model to use
+        model: Kimi model to use through Claude Code
         max_iterations: Maximum number of iterations (None for unlimited)
     """
     print("\n" + "=" * 70)

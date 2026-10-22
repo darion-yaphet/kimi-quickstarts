@@ -1,9 +1,9 @@
-"""Agent implementation with Claude API and tools."""
+"""Agent implementation with an Anthropic-compatible API and tools."""
 
 import asyncio
 import os
 from contextlib import AsyncExitStack
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from anthropic import Anthropic
@@ -14,21 +14,28 @@ from .utils.history_util import MessageHistory
 from .utils.tool_util import execute_tools
 
 
+DEFAULT_BASE_URL = "https://api.kimi.com/coding/"
+DEFAULT_MODEL = "kimi-for-coding"
+
+
 @dataclass
 class ModelConfig:
-    """Configuration settings for Claude model parameters."""
+    """Configuration settings for model parameters."""
 
-    # Available models include:
-    # - claude-sonnet-5-5 (default)
-    # - claude-opus-5-5
-    # - claude-haiku-4-5-20251001
-    model: str = "claude-sonnet-5-5"
+    model: str = field(
+        default_factory=lambda: os.environ.get("ANTHROPIC_MODEL", DEFAULT_MODEL)
+    )
     max_tokens: int = 4096
-    context_window_tokens: int = 180000
+    context_window_tokens: int = field(
+        default_factory=lambda: int(
+            os.environ.get("ANTHROPIC_CONTEXT_WINDOW_TOKENS", "262144")
+        )
+    )
+    enable_prompt_caching: bool = False
 
 
 class Agent:
-    """Claude-powered agent with tool use capabilities."""
+    """Anthropic-compatible agent with tool use capabilities."""
 
     def __init__(
         self,
@@ -62,13 +69,15 @@ class Agent:
         self.mcp_servers = mcp_servers or []
         self.message_params = message_params or {}
         self.client = client or Anthropic(
-            api_key=os.environ.get("ANTHROPIC_API_KEY", "")
+            api_key=os.environ.get("ANTHROPIC_API_KEY", ""),
+            base_url=os.environ.get("ANTHROPIC_BASE_URL", DEFAULT_BASE_URL),
         )
         self.history = MessageHistory(
             model=self.config.model,
             system=self.system,
             context_window_tokens=self.config.context_window_tokens,
             client=self.client,
+            enable_caching=self.config.enable_prompt_caching,
         )
 
         if self.verbose:
@@ -101,19 +110,9 @@ class Agent:
             self.history.truncate()
             params = self._prepare_message_params()
 
-            # Merge headers properly - default beta header can be overridden by message_params
-            default_headers = {"anthropic-beta": "code-execution-2025-05-22"}
-            if "extra_headers" in params:
-                # Pop extra_headers from params and merge with defaults
-                custom_headers = params.pop("extra_headers")
-                merged_headers = {**default_headers, **custom_headers}
-            else:
-                merged_headers = default_headers
-
-            response = self.client.messages.create(
-                **params,
-                extra_headers=merged_headers
-            )
+            # Provider-specific beta headers may be supplied explicitly through
+            # message_params. Portable custom tools need no beta header.
+            response = self.client.messages.create(**params)
             tool_calls = [
                 block for block in response.content if block.type == "tool_use"
             ]

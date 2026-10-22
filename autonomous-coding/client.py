@@ -1,13 +1,9 @@
-"""
-Claude SDK Client Configuration
-===============================
-
-Functions for creating and configuring the Claude Agent SDK client.
-"""
+"""Claude Agent SDK client configured for Kimi Code forwarding."""
 
 import json
 import os
 from pathlib import Path
+from urllib.parse import urlparse
 
 from claude_code_sdk import ClaudeCodeOptions, ClaudeSDKClient
 from claude_code_sdk.types import HookMatcher
@@ -36,6 +32,44 @@ BUILTIN_TOOLS = [
     "Bash",
 ]
 
+DEFAULT_BASE_URL = "https://api.kimi.com/coding/"
+MODEL_ENV_VARS = (
+    "ANTHROPIC_MODEL",
+    "ANTHROPIC_DEFAULT_FABLE_MODEL",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+    "CLAUDE_CODE_SUBAGENT_MODEL",
+)
+
+
+def configure_kimi_environment(model: str) -> None:
+    """Supply Claude Code's Kimi endpoint and fallback model settings.
+
+    Existing environment values remain authoritative, which allows callers to
+    route individual Claude Code task tiers to different Kimi models.
+    """
+    base_url = os.environ.get("KIMI_BASE_URL") or os.environ.get("ANTHROPIC_BASE_URL") or DEFAULT_BASE_URL
+    if urlparse(base_url).hostname == "api.anthropic.com":
+        base_url = DEFAULT_BASE_URL
+    os.environ["ANTHROPIC_BASE_URL"] = base_url
+    for variable in MODEL_ENV_VARS:
+        current = os.environ.get(variable, "")
+        if not current or "claude" in current.lower():
+            os.environ[variable] = model
+    os.environ["ANTHROPIC_MODEL"] = model
+    if os.environ.get("KIMI_API_KEY"):
+        os.environ["ANTHROPIC_API_KEY"] = os.environ["KIMI_API_KEY"]
+
+    context_tokens = (
+        "1048576"
+        if model == "kimi-for-coding" or model.endswith("[1m]")
+        else "262144"
+    )
+    os.environ.setdefault("CLAUDE_CODE_EFFORT_LEVEL", "high")
+    os.environ.setdefault("CLAUDE_CODE_AUTO_COMPACT_WINDOW", context_tokens)
+    os.environ.setdefault("CLAUDE_CODE_MAX_CONTEXT_TOKENS", context_tokens)
+
 
 def create_client(project_dir: Path, model: str) -> ClaudeSDKClient:
     """
@@ -43,7 +77,7 @@ def create_client(project_dir: Path, model: str) -> ClaudeSDKClient:
 
     Args:
         project_dir: Directory for the project
-        model: Claude model to use
+        model: Kimi model to use through Claude Code
 
     Returns:
         Configured ClaudeSDKClient
@@ -54,11 +88,13 @@ def create_client(project_dir: Path, model: str) -> ClaudeSDKClient:
     3. Security hooks - Bash commands validated against an allowlist
        (see security.py for ALLOWED_COMMANDS)
     """
+    configure_kimi_environment(model)
+
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         raise ValueError(
             "ANTHROPIC_API_KEY environment variable not set.\n"
-            "Get your API key from: https://console.anthropic.com/"
+            "Create a Kimi Code API key at: https://www.kimi.com/code/console"
         )
 
     # Create comprehensive security settings

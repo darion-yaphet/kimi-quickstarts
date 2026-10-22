@@ -1,4 +1,10 @@
-# Computer and Browser Use with Claude
+# Computer and Browser Use with Kimi Code
+
+This fork defaults to `kimi-for-coding` at
+`https://api.kimi.com/coding/`, using standard Anthropic-compatible Messages,
+image, and custom-tool blocks. In Kimi mode the computer and browser tools run
+locally; Claude-only hosted tools, prompt caching, thinking/effort parameters,
+the advisor, and server-side compaction are omitted automatically.
 
 > [!CAUTION]
 > **This is a reference implementation for instructional purposes only.**
@@ -59,7 +65,7 @@ A focused, pedagogical demo of Claude computer-use on **macOS**, running
 >
 > ```bash
 > python -m pip install -r requirements.txt && python -m playwright install chromium
-> echo "ANTHROPIC_API_KEY=<YOUR API KEY HERE>" > .env
+> cp .env.example .env  # then add your Kimi Code key
 > python -m computer_use "open TextEdit and type hello world"
 > ```
 >
@@ -128,6 +134,9 @@ repo root (copy `.env.example`):
 ```bash
 cp .env.example .env  # then edit .env
 # or: export ANTHROPIC_API_KEY=...
+# Optional overrides:
+# export ANTHROPIC_BASE_URL=https://api.kimi.com/coding/
+# export CU_API_BASE_URL=https://api.kimi.com/coding/
 ```
 
 ## Run the agent
@@ -168,7 +177,7 @@ Everything the agent sends or receives is also written to
 `runs/<timestamp>/` as a JSONL transcript plus the JPEG screenshots, so you
 can replay it later in the viewer.
 
-Useful flags: `--model {claude-haiku-4-5,claude-sonnet-4-6,claude-opus-4-6,claude-opus-4-7}`,
+Useful flags: `--model kimi-for-coding`,
 `--thinking {off,low,medium,high,max}`, `--max-iters N`, `--skip-preflight`.
 
 ## View a trajectory
@@ -271,7 +280,7 @@ String values are coerced to the declared field type (`"true"`→`True`,
 | `enable_browser_use_tools` | `true` | `browser`, `browser_batch` (headless Playwright). |
 | `enable_editor_tool` | `true` | `editor` (view/create/str_replace/insert) confined to the per-run scratch dir; bash/python share the same workspace. Also adds the TODO.md guidance to the system prompt. |
 | `enable_advisor_tool` | `false` | Server-side advisor: the executor model can consult `advisor_model` (Opus by default) mid-generation. See [Advisor tool](#advisor-tool-experimental). |
-| `enable_autocompaction` | `true` | Server-side `compact_20260112`: when input tokens cross `autocompaction_trigger_tokens`, the server summarizes older context. Only applied on supported models (Sonnet/Opus). |
+| `enable_autocompaction` | `false` in Kimi mode | Claude server-side `compact_20260112`; omitted automatically from Kimi requests. |
 | `image_prune_strategy` | `"interval"` | `"none"` keeps every screenshot; `"simple"` keeps the last N (cache-hostile); `"interval"` keeps the prefix stable for `image_prune_interval` turns. See the next section. |
 | `print_usage` | `true` | Per-turn `[usage]` line with token counts and cache efficiency. |
 | `extra_models` | `()` | Additional model IDs accepted by `--model` (older or beta models not in the built-in enum). |
@@ -330,9 +339,9 @@ with `input.action`, which is the explicit tool's own shape.
 
 ## Providers
 
-`cfg.provider` selects the API surface: `"anthropic"` (default, first-party),
-`"vertex"` (Google Cloud, via `AnthropicVertex`), or `"bedrock"` (AWS, via
-`AnthropicBedrock`). See `.env.example` for the credentials each one expects.
+`cfg.provider` selects the API surface: `"kimi"` (default, Anthropic-compatible
+Messages endpoint), `"anthropic"` (first-party), `"vertex"` (Google Cloud),
+or `"bedrock"` (AWS). See `.env.example` for endpoint and credential settings.
 
 Vertex and Bedrock impose a request-body size cap that the first-party API
 does not. The demo enforces a conservative threshold (18 MB on Vertex, 11 MB
@@ -340,10 +349,9 @@ on Bedrock) inside the image pruner: if the serialized message list exceeds
 the cap, it force-prunes to `cfg.image_prune_min` images and resets the
 interval cycle so subsequent turns start small.
 
-The advisor tool and server-side autocompaction are first-party-only beta
-features. Enabling either with `provider != "anthropic"` raises a `ValueError`
-at startup that names the conflicting setting; set it to `False` (or switch
-provider) to proceed.
+Kimi mode normalizes the computer declaration to the explicit local tool and
+disables the advisor and server-side autocompaction. Vertex and Bedrock still
+require first-party-only beta options to be disabled explicitly.
 
 ## Effective caching and context pruning
 

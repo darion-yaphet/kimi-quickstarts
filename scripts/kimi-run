@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+project_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+if [[ $# -lt 2 ]]; then
+  echo "Usage: scripts/kimi-run <quickstart-directory> <command> [args...]" >&2
+  exit 2
+fi
+project_dir="$1"
+shift
+if [[ "$project_dir" = /* || "$project_dir" = *..* || ! -d "$project_root/$project_dir" ]]; then
+  echo "Choose a quickstart directory inside this repository." >&2
+  exit 2
+fi
+if [[ -f "$project_root/.env.kimi.local" ]]; then
+  set -a
+  source "$project_root/.env.kimi.local"
+  set +a
+fi
+export KIMI_API_KEY="${KIMI_API_KEY:-${ANTHROPIC_API_KEY:-}}"
+export KIMI_BASE_URL="${KIMI_BASE_URL:-https://api.kimi.com/coding/}"
+export KIMI_MODEL="${KIMI_MODEL:-kimi-for-coding}"
+export ANTHROPIC_API_KEY="$KIMI_API_KEY"
+export ANTHROPIC_BASE_URL="$KIMI_BASE_URL"
+export ANTHROPIC_MODEL="$KIMI_MODEL"
+unset ANTHROPIC_AUTH_TOKEN CLAUDE_CODE_OAUTH_TOKEN
+export MODEL="$ANTHROPIC_MODEL"
+export ANTHROPIC_DEFAULT_OPUS_MODEL="$ANTHROPIC_MODEL"
+export ANTHROPIC_DEFAULT_SONNET_MODEL="$ANTHROPIC_MODEL"
+export ANTHROPIC_DEFAULT_HAIKU_MODEL="$ANTHROPIC_MODEL"
+export ANTHROPIC_DEFAULT_FABLE_MODEL="$ANTHROPIC_MODEL"
+export API_PROVIDER=kimi
+export CU_PROVIDER=kimi
+cd -- "$project_root/$project_dir"
+exec "$@"

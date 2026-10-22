@@ -78,6 +78,28 @@ class TestResponseProcessor:
         assert result.assistant_content[1]["type"] == "tool_use"
         assert len(result.tool_uses) == 1
 
+    def test_process_response_preserves_signed_thinking_before_tool_use(self):
+        thinking = Mock(type="thinking")
+        thinking.model_dump.return_value = {
+            "type": "thinking",
+            "thinking": "inspect the current page",
+            "signature": "signed-thinking",
+        }
+        tool_use = Mock(type="tool_use", id="tool_1", name="browser", input={})
+        tool_use.model_dump.return_value = {
+            "type": "tool_use",
+            "id": "tool_1",
+            "name": "browser",
+            "input": {},
+        }
+
+        result = ResponseProcessor().process_response(
+            Mock(content=[thinking, tool_use])
+        )
+
+        assert result.assistant_content[0]["signature"] == "signed-thinking"
+        assert result.assistant_content[1]["id"] == "tool_1"
+
     def test_execute_tools_success(self):
         """Test successful tool execution."""
 
@@ -306,6 +328,67 @@ class TestMessageBuilder:
 @pytest.mark.integration
 class TestSamplingLoopIntegration:
     """Integration tests for the sampling loop."""
+
+    @patch("browser_use_demo.loop.Anthropic")
+    def test_kimi_uses_standard_messages_without_betas(self, mock_anthropic):
+        async def run_test():
+            mock_client = Mock()
+            mock_anthropic.return_value = mock_client
+            mock_client.messages.create.return_value = Mock(
+                content=[Mock(type="text", text="done")]
+            )
+
+            await sampling_loop(
+                model="kimi-for-coding",
+                provider=APIProvider.KIMI,
+                system_prompt_suffix="",
+                messages=[{"role": "user", "content": "Test"}],
+                output_callback=lambda _: None,
+                tool_output_callback=lambda *_: None,
+                api_response_callback=lambda *_: None,
+                api_key="test-key",
+                base_url="https://example.invalid/",
+            )
+
+            mock_anthropic.assert_called_once_with(
+                api_key="test-key",
+                base_url="https://example.invalid/",
+                max_retries=4,
+            )
+            mock_client.messages.create.assert_called_once()
+            mock_client.beta.messages.create.assert_not_called()
+            kwargs = mock_client.messages.create.call_args.kwargs
+            assert "betas" not in kwargs
+            assert "cache_control" not in kwargs["system"][0]
+
+        asyncio.run(run_test())
+
+    @patch("browser_use_demo.loop.Anthropic")
+    def test_max_tokens_is_rejected_before_turn_is_accepted(self, mock_anthropic):
+        async def run_test():
+            mock_client = Mock()
+            mock_anthropic.return_value = mock_client
+            mock_client.messages.create.return_value = Mock(
+                content=[Mock(type="text", text="partial")],
+                stop_reason="max_tokens",
+            )
+            messages = [{"role": "user", "content": "Test"}]
+
+            with pytest.raises(RuntimeError, match="reached max_tokens"):
+                await sampling_loop(
+                    model="kimi-for-coding",
+                    provider=APIProvider.KIMI,
+                    system_prompt_suffix="",
+                    messages=messages,
+                    output_callback=lambda _: None,
+                    tool_output_callback=lambda *_: None,
+                    api_response_callback=lambda *_: None,
+                    api_key="test-key",
+                )
+
+            assert messages == [{"role": "user", "content": "Test"}]
+
+        asyncio.run(run_test())
 
     @patch("browser_use_demo.loop.Anthropic")
     def test_sampling_loop_preserves_text_with_tools(self, mock_anthropic):

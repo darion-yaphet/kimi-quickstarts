@@ -1,6 +1,8 @@
-# Browser Automation Demo with Claude
+# Browser Automation Demo with Kimi Code
 
-A complete reference implementation for building browser automation with Claude using Playwright. This demo provides a containerized Streamlit interface showcasing how to give Claude the ability to navigate websites, interact with DOM elements, extract content, and fill forms.
+A containerized Playwright browser agent using Kimi Code through its
+Anthropic-compatible Messages API. Browser actions remain ordinary custom
+tools and screenshots remain standard image content blocks.
 
 > [!TIP]
 > **Looking for production-readiness patterns?** This demo is a deliberately minimal, containerized reference focused on browser-only (DOM) automation in Docker. If you want to see common patterns for making computer- and browser-use agents more reliable and cost-effective — explicit tool definitions, image sizing and pruning, prompt caching, server-side compaction, batched tool calls, a sandboxed shell, and trajectory recording — see the [Computer Use Best Practices](../computer-use-best-practices) quickstart, which runs a full GUI agent (screenshot-and-click plus a Playwright browser tool) natively on macOS and pairs with Anthropic's [computer-use best-practices guide](https://claude.com/blog/best-practices-for-computer-and-browser-use-with-claude).
@@ -29,24 +31,31 @@ This demo implements a custom browser tool that enables Claude to interact with 
 ### Prerequisites
 
 - Docker and Docker Compose installed on your system
-- Anthropic API key
+- Kimi Code API key
 
 ### Setup
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/anthropics/claude-quickstarts.git
-   cd claude-quickstarts/browser-use-demo
+   git clone https://github.com/darion-yaphet/kimi-quickstarts.git
+   cd kimi-quickstarts/browser-use-demo
    ```
 
 2. **Configure environment**:
    ```bash
    cp .env.example .env
-   # Edit .env file and add your ANTHROPIC_API_KEY
+   # Add your Kimi Code key as KIMI_API_KEY.
+   # ANTHROPIC_BASE_URL and KIMI_MODEL already have working defaults.
    ```
 
    The display resolution is set to 1920x1080 (16:9) for optimal coordinate accuracy.
    - See `.env.example` for more options and coordinate scaling details
+
+   `KIMI_API_KEY` takes precedence over the Anthropic-compatible fallback
+   `ANTHROPIC_API_KEY`. If you use the optional local key file, Kimi reads only
+   `~/.kimi/api_key`; it never reuses `~/.anthropic/api_key`. Switching the
+   provider in the UI replaces the credential and clears conversation history.
+   Manage Kimi Code keys at https://www.kimi.com/code/console.
 
 ### Running with Docker Compose
 
@@ -230,8 +239,8 @@ This is less relevant for browser automation since the `ref` parameter provides 
 - Ensure Docker has sufficient resources allocated
 
 **API errors?**
-- Verify your Anthropic API key is set correctly
-- Check you're using a compatible model (Claude 4.5 models: claude-sonnet-4-5-20250929, claude-opus-4-5-20251101, or claude-haiku-4-5-20251001)
+- Verify your Kimi Code key is set as `KIMI_API_KEY`
+- Verify `ANTHROPIC_BASE_URL` and `KIMI_MODEL` match your Kimi Code account
 
 **Browser actions failing?**
 - Some websites may have anti-automation measures
@@ -245,7 +254,7 @@ This software includes components from Microsoft Playwright. See the [NOTICE](NO
 ## Credits
 
 Built with:
-- [Anthropic Claude API](https://www.anthropic.com)
+- [Kimi Code API](https://www.kimi.com/code/docs/)
 - [Playwright](https://playwright.dev)
 - [Streamlit](https://streamlit.io)
 - [NoVNC](https://novnc.com)

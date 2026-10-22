@@ -1,7 +1,14 @@
-# Anthropic Computer Use Demo
+# Kimi Computer Use Demo
+
+This fork defaults to Kimi Code and ordinary custom computer, bash and editor
+tools. Follow the Kimi quickstart below and build the local image. The upstream
+Claude provider paths remain optional; their model-specific configuration does
+not apply to Kimi.
 
 > [!NOTE]
-> The demo now defaults to Claude Opus 4.8 (claude-opus-4-8), the latest model, with adaptive thinking — the model decides how much to reason, steered by a selectable effort level. Claude Opus 4.7, Opus 4.6, and Sonnet 4.6 are also supported with adaptive thinking, while older models (Claude Opus 4.5, Sonnet 4.5, Sonnet 4, Opus 4, and Haiku 4.5) continue to work with extended thinking and the str_replace_based_edit_tool.
+> The default provider is Kimi with model `kimi-for-coding`. Model-side reasoning
+> follows Kimi's default; the Claude-specific thinking controls apply only when
+> you explicitly select a Claude provider.
 
 > [!CAUTION]
 > Computer use is a beta feature. Please be aware that computer use poses unique risks that are distinct from standard API features or chat interfaces. These risks are heightened when using computer use to interact with the internet. To minimize risks, consider taking precautions such as:
@@ -40,6 +47,44 @@ The demo supports every dated version of the Anthropic-defined computer use tool
 The most recent shape, `computer_toolset_20260801`, declares the computer tool as a *toolset*: a single nameless entry in `tools[]` that declares one member tool per computer action. The model then calls each action as its own tool — `tool_use.name` is the member name (`left_click`, `screenshot`, ...), the block carries `toolset_name: "computer"`, and the input is that action's parameters with no `action` discriminator. Every `tool_result` answering a member call carries the same `toolset_name`, member calls in a turn run sequentially and stop on the first failure, and the toolset requires no `anthropic-beta` header. Earlier dated versions of the tool (API types `computer_20241022` through `computer_20251124`, the sidebar's `computer_use_*` entries) keep the single `computer` tool with an `action` parameter and their respective beta headers. A model supports either the toolset or the earlier dated versions it was trained with — check the [computer use documentation](https://docs.claude.com/en/docs/agents-and-tools/computer-use) for each model's supported versions.
 
 ## Quickstart: running the Docker container
+
+### Kimi Code (custom-tool compatibility mode)
+
+This repository also supports Kimi Code through its Anthropic-compatible
+Messages endpoint. In Kimi mode the desktop tools are declared as ordinary
+custom tools instead of Claude's built-in computer-use tool types. Image
+input and tool calling must be available to the selected Kimi model and
+account. This is an experimental adaptation, not a guarantee of feature or
+behavioral parity with Claude computer use.
+
+Build the local image: the prebuilt Anthropic image does not include these
+changes. Set `ANTHROPIC_API_KEY` in your shell to a Kimi Code API key without
+committing it or putting it in the command history, then run:
+
+```bash
+cd computer-use-demo
+docker build -t computer-use-demo:kimi .
+docker run --rm -it \
+  -e API_PROVIDER=kimi \
+  -e ANTHROPIC_API_KEY \
+  -e ANTHROPIC_BASE_URL=https://api.kimi.com/coding/ \
+  -p 127.0.0.1:8080:8080 \
+  -p 127.0.0.1:8501:8501 \
+  -p 127.0.0.1:6080:6080 \
+  computer-use-demo:kimi
+```
+
+Open http://localhost:8080 and select the Kimi provider if it is not already
+selected. The default model is `kimi-for-coding`; model access depends on your
+Kimi Code membership. For the overseas endpoint use
+`https://api.kimi.ai/coding/` instead. See [Kimi's model configuration](https://www.kimi.com/code/docs/en/kimi-code/models)
+for current model and endpoint details.
+
+The container can execute commands and control its desktop. Use a disposable,
+minimally privileged environment, do not mount sensitive files or credentials,
+and review consequential actions. Screenshots and task content are sent to
+the model provider. Kimi Code is intended for programming scenarios; Kimi
+recommends its open platform for product integrations.
 
 ### Claude API
 

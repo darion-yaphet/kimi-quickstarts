@@ -302,7 +302,7 @@ function ChatArea() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showHeader, setShowHeader] = useState(false);
-  const [selectedModel, setSelectedModel] = useState("claude-haiku-4-5-20251001");
+  const [selectedModel, setSelectedModel] = useState("kimi-for-coding");
   const [showAvatar, setShowAvatar] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -316,9 +316,8 @@ function ChatArea() {
   ];
 
   const models: Model[] = [
-    { id: "claude-3-haiku-20240307", name: "Claude 3 Haiku" },
-    { id: "claude-haiku-4-5-20251001", name: "Claude 4.5 Haiku" },
-    { id: "claude-3-5-sonnet-20240620", name: "Claude 3.5 Sonnet" },
+    { id: "kimi-for-coding", name: "Kimi for Coding" },
+    { id: "kimi-for-coding-highspeed", name: "Kimi Coding Highspeed" },
   ];
 
   const scrollToBottom = () => {
@@ -694,7 +693,7 @@ function ChatArea() {
             <div>
               <Image
                 src="/claude-icon.svg"
-                alt="Claude Icon"
+                alt="Assistant Icon"
                 width={0}
                 height={14}
                 className="w-auto h-[14px] mt-1"

@@ -19,7 +19,7 @@ except ImportError:
 def validate_env():
     """Validate required environment variables are set."""
     # Check API key
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    api_key = os.environ.get("KIMI_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")
 
     if not api_key:
         print("\n" + "=" * 60)
@@ -29,17 +29,17 @@ def validate_env():
         print("\n🔧 RECOMMENDED: Use docker-compose with a .env file:")
         print("  1. Copy the example environment file:")
         print("     cp .env.example .env")
-        print("  2. Edit .env and add your Anthropic API key")
+        print("  2. Edit .env and add your Kimi Code API key")
         print("  3. Run with docker-compose:")
         print("     docker-compose up --build")
         print("=" * 60)
         sys.exit(1)
 
-    if api_key == "your_anthropic_api_key_here" or len(api_key) < 10:
+    if api_key in {"your_anthropic_api_key_here", "your_kimi_code_api_key_here"} or len(api_key) < 10:
         print("\n" + "=" * 60)
         print("ERROR: Invalid API key!")
         print("=" * 60)
-        print("  ANTHROPIC_API_KEY: Must be a valid API key")
+        print("  KIMI_API_KEY: Must be a valid Kimi Code API key")
         print("\nTo fix this, please edit your .env file with a valid API key")
         print("=" * 60)
         sys.exit(1)

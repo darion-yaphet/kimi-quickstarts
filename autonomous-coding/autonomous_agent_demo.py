@@ -3,7 +3,8 @@
 Autonomous Coding Agent Demo
 ============================
 
-A minimal harness demonstrating long-running autonomous coding with Claude.
+A minimal harness demonstrating long-running autonomous coding with Kimi Code
+through the Claude Agent SDK.
 This script implements the two-agent pattern (initializer + coding agent) and
 incorporates all the strategies from the long-running agents guide.
 
@@ -21,7 +22,7 @@ from agent import run_autonomous_agent
 
 
 # Configuration
-DEFAULT_MODEL = "claude-sonnet-4-5-20250929"
+DEFAULT_MODEL = os.environ.get("ANTHROPIC_MODEL", "kimi-for-coding")
 
 
 def parse_args() -> argparse.Namespace:
@@ -35,7 +36,7 @@ Examples:
   python autonomous_agent_demo.py --project-dir ./claude_clone
 
   # Use a specific model
-  python autonomous_agent_demo.py --project-dir ./claude_clone --model claude-sonnet-4-5-20250929
+  python autonomous_agent_demo.py --project-dir ./kimi_app --model k3-256k
 
   # Limit iterations for testing
   python autonomous_agent_demo.py --project-dir ./claude_clone --max-iterations 5
@@ -44,7 +45,9 @@ Examples:
   python autonomous_agent_demo.py --project-dir ./claude_clone
 
 Environment Variables:
-  ANTHROPIC_API_KEY    Your Anthropic API key (required)
+  ANTHROPIC_API_KEY    Your Kimi Code API key (required)
+  ANTHROPIC_BASE_URL   Anthropic-compatible endpoint (default: https://api.kimi.com/coding/)
+  ANTHROPIC_MODEL      Default Kimi model (default: kimi-for-coding)
         """,
     )
 
@@ -66,7 +69,7 @@ Environment Variables:
         "--model",
         type=str,
         default=DEFAULT_MODEL,
-        help=f"Claude model to use (default: {DEFAULT_MODEL})",
+        help=f"Kimi model to use (default: {DEFAULT_MODEL})",
     )
 
     return parser.parse_args()
@@ -79,7 +82,7 @@ def main() -> None:
     # Check for API key
     if not os.environ.get("ANTHROPIC_API_KEY"):
         print("Error: ANTHROPIC_API_KEY environment variable not set")
-        print("\nGet your API key from: https://console.anthropic.com/")
+        print("\nCreate a Kimi Code API key at: https://www.kimi.com/code/console")
         print("\nThen set it:")
         print("  export ANTHROPIC_API_KEY='your-api-key-here'")
         return

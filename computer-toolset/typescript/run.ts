@@ -1,14 +1,13 @@
 #!/usr/bin/env -S npx --no-install tsx
 /**
- * Run Claude's computer toolset from the command line, with the example driver.
+ * Run Kimi Code with ordinary computer tools backed by the example VNC driver.
  *
  * Usage:
  *
  *     npx tsx run.ts "Open a terminal, run date, and tell me today's date and time zone."
  *
- * It connects the example driver to a VNC server, hands it to the tool runner, and prints each of the model's
- * messages until the model finishes. Before each action other than a screenshot, it shows you the call and asks y/N.
- * It uses only the SDK's abstract toolset, so any other driver swaps in the same way.
+ * It connects the example driver to a VNC server, exposes its actions as ordinary custom tools, and prints each model
+ * response until the model finishes. Before each action other than a screenshot, it shows you the call and asks y/N.
  *
  * It needs `npm install` in this folder (`@anthropic-ai/sdk`, `pngjs`, `tsx`), vnc-computer.ts next to this file, a
  * VNC server without a password (see the README) and an API key in `ANTHROPIC_API_KEY`.
@@ -24,12 +23,16 @@ import { stdin as input, stdout as output } from 'node:process';
 import * as readline from 'node:readline/promises';
 
 import Anthropic from '@anthropic-ai/sdk';
+import { runLoop } from './kimi-adapter.js';
 import { VncComputer } from './vnc-computer.js';
 
 async function main(): Promise<void> {
   const task =
     process.argv.slice(2).join(' ') || "Open a terminal, run date, and tell me today's date and time zone.";
-  const client = new Anthropic();
+  const client = new Anthropic({
+    apiKey: process.env['ANTHROPIC_API_KEY'],
+    baseURL: process.env['ANTHROPIC_BASE_URL'] ?? 'https://api.kimi.com/coding/',
+  });
   // `terminal: false` reads plain lines, so Ctrl-C still stops the run.
   const terminal = readline.createInterface({ input, output, terminal: false });
   const computer = await VncComputer.connect({
@@ -48,17 +51,15 @@ async function main(): Promise<void> {
       return answer.trim().toLowerCase() === 'y';
     },
   });
-  // The tool runner never closes the connection. The finally closes it, whether the loop ends or fails.
+  // The model loop does not own the connection. The finally closes it whether the loop ends or fails.
   try {
-    const runner = client.beta.messages.toolRunner({
-      model: process.env['MODEL'] ?? 'claude-sonnet-5-5',
-      max_tokens: 4096,
-      tools: [computer],
-      messages: [{ role: 'user', content: task }],
-    });
-    for await (const message of runner) {
-      console.dir(message, { depth: 4 });
-    }
+    await runLoop(
+      client,
+      computer,
+      task,
+      process.env['MODEL'] ?? 'kimi-for-coding',
+      Number(process.env['MAX_TOOL_TURNS'] ?? 30),
+    );
   } finally {
     terminal.close();
     await computer.close();

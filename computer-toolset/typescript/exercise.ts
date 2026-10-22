@@ -6,9 +6,8 @@
  *
  *     npx tsx exercise.ts
  *
- * The script connects the example driver to the VNC server and sends the toolset the `tool_use` calls a model would
- * send, through `computer.toolResult()`, which runs the same pipeline as the tool runner. It prints each
- * `tool_result` as the model would see it, then checks it:
+ * The script connects the example driver to the VNC server and sends the `tool_use` calls a model would send through
+ * the Kimi dispatch adapter. It prints each `tool_result` as the model would see it, then checks it:
  *
  * - `screenshot`, `left_click` on the middle of the screen, `type`, `key`, `wait` and a second `screenshot` (taken
  *   again for a few seconds if the server has not caught up) are all answered;
@@ -27,6 +26,7 @@ import type {
   BetaToolResultBlockParam,
   BetaToolResultContentBlockParam,
 } from '@anthropic-ai/sdk/resources/beta';
+import { dispatch } from './kimi-adapter.js';
 import { VncComputer } from './vnc-computer.js';
 
 /** Sends one tool call as the model would and prints the result as the model would see it. */
@@ -35,13 +35,7 @@ async function call(
   name: string,
   input: Record<string, unknown>,
 ): Promise<BetaToolResultBlockParam> {
-  const result = await computer.toolResult({
-    type: 'tool_use',
-    id: `toolu_${name}`,
-    name,
-    input,
-    toolset_name: 'computer',
-  });
+  const result = await dispatch(computer, `toolu_${name}`, name, input);
   console.log(`\n${name} ${JSON.stringify(input)} -> ${result.is_error ? 'refused' : 'answered'}`);
   for (const block of blocksOf(result)) {
     console.log(

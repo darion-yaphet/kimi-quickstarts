@@ -1,0 +1,14 @@
+# Local credentials and runtime state, across every example.
+.env
+.env.local
+.env.*.local
+.env.kimi.local
+.omx/
+.DS_Store
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+node_modules/
+.next/

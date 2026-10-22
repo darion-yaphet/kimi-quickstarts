@@ -3,9 +3,11 @@ import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import type { ChartData } from "@/types/chart";
 
-// Initialize Anthropic client with correct headers
+// Kimi Code exposes an Anthropic-compatible Messages endpoint.
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY!,
+  baseURL:
+    process.env.ANTHROPIC_BASE_URL || "https://api.kimi.com/coding/",
 });
 
 export const runtime = "edge";
@@ -192,7 +194,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    console.log("🚀 Final Claude API Request:", {
+    console.log("🚀 Final model API request:", {
       endpoint: "messages.create",
       model,
       max_tokens: 4096,
@@ -327,7 +329,7 @@ Never:
 Focus on clear financial insights and let the visualization enhance understanding.`,
     });
 
-    console.log("✅ Claude API Response received:", {
+    console.log("✅ Model API response received:", {
       status: "success",
       stopReason: response.stop_reason,
       hasToolUse: response.content.some((c) => c.type === "tool_use"),

@@ -4,7 +4,9 @@ services:
       context: .
     image: browser-use-demo:latest
     environment:
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - KIMI_API_KEY=${KIMI_API_KEY}
+      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-https://api.kimi.com/coding/}
+      - KIMI_MODEL=${KIMI_MODEL:-kimi-for-coding}
     volumes:
       - ./validate_env.py:/home/browseruse/validate_env.py
       - ${HOME}/.anthropic:/home/browseruse/.anthropic

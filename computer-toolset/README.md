@@ -1,13 +1,14 @@
-# Computer Toolset Quickstart
+# Kimi Computer Tools Quickstart
 
-The minimal VNC example of Claude's computer toolset (`computer_toolset_20260801`), in Python and TypeScript. You declare one toolset entry in `tools`. The model calls each desktop action (`screenshot`, `left_click`, `type` and the rest) as its own tool, and a driver runs those calls on a desktop.
+This example gives Kimi Code ordinary custom tools for a desktop reached over VNC: screenshots, pointer actions, scrolling, typing, key presses, and waits. It uses the Anthropic-compatible Messages API rather than a hosted computer-toolset protocol.
 
-The driver is a few hundred lines. It drives one desktop over VNC (the RFB protocol) and implements ten of the toolset's tools. It shows the interface. It is not production code.
+The existing SDK driver remains the local execution and safety layer. The Kimi adapter declares ordinary JSON schemas and dispatches calls through the driver's validation and confirmation pipeline.
 
 | File | What it is |
 | --- | --- |
-| `run.py` / `run.ts` | The quickstart: builds the example driver, hands it to the tool runner and prints the model's messages. Start here. |
-| `exercise.py` / `exercise.ts` | The same toolset driven without a model: sends the calls a model would send to your VNC server and prints what the model would see. |
+| `run.py` / `run.ts` | Runs a bounded Kimi Messages API tool loop. Start here. |
+| `kimi_adapter.py` / `kimi-adapter.ts` | Ordinary tool schemas, local dispatch, and the tool loop. |
+| `exercise.py` / `exercise.ts` | Exercises the same dispatch path without a model against your VNC server. |
 | `vnc_computer.py` / `vnc-computer.ts` | The example driver: a subclass of the SDK's abstract computer toolset, one desktop over raw RFB. |
 
 > [!WARNING]
@@ -21,7 +22,7 @@ The driver is a few hundred lines. It drives one desktop over VNC (the RFB proto
 
 You need:
 
-- an Anthropic API key in `ANTHROPIC_API_KEY`;
+- a Kimi Code API key in `ANTHROPIC_API_KEY`;
 - an Anthropic SDK version with the computer toolset helpers (`anthropic.tools.computer` in Python, `@anthropic-ai/sdk/helpers/beta/toolsets` in TypeScript);
 - Python 3.10+ or Node.js 20+;
 - a VNC server without a password, on a screen no larger than 1920×1200. TigerVNC's `Xvnc` is one process and needs nothing else (`apt install tigervnc-standalone-server`); `-SecurityTypes None` turns off the password it asks for by default:
@@ -53,7 +54,8 @@ npm run start -- "Open a terminal, run date, and tell me today's date and time z
 
 The whole command line is the task. `run.ts` reads no options, so even `--help` goes to the model. `run.py` answers `--help` itself.
 
-It prints each of the model's messages as it arrives: its tool calls, then its final answer. `run` uses only the SDK's abstract toolset, so another driver works the same way: build it, pass it in `tools`, loop over the tool runner, and close it when the loop ends.
+It prints each model response: tool calls followed by the final answer. By default it sends standard Messages API requests to `https://api.kimi.com/coding/` with model `kimi-for-coding`.
+Each response has an 8192-token output budget. A `max_tokens` stop is reported as an error instead of being mistaken for a completed task.
 
 Before each action other than a screenshot, `run` shows you the call and runs it only if you answer `y`. It does this through the toolset's `confirm` option. `exercise` passes a `confirm` that approves every call.
 
@@ -61,24 +63,29 @@ Before each action other than a screenshot, `run` shows you the call and runs it
 | --- | --- |
 | `VNC_HOST` | The VNC server's host. Default: `127.0.0.1`. |
 | `VNC_PORT` | The VNC server's port. Default: `5900`. |
-| `MODEL` | The model to run. Default: `claude-sonnet-5-5`. |
+| `ANTHROPIC_BASE_URL` | Anthropic-compatible endpoint. Default: `https://api.kimi.com/coding/`. |
+| `MODEL` | Model to run. Default: `kimi-for-coding`. |
+| `MAX_TOOL_TURNS` | Maximum model/tool round trips. Default: `30`. |
 
 ## Exercise the toolset without a model
 
-`exercise` needs no API key. It connects the driver to the VNC server and sends the calls a model would send, through the entry point the tool runner uses:
+`exercise` needs no API key. It connects the driver to the VNC server and sends the calls a model would send through the Kimi adapter:
 
 ```bash
 python exercise.py        # Python
 npm run exercise          # TypeScript
+
+python -m unittest -v test_kimi_adapter.py  # adapter regression tests
+npm run typecheck                             # TypeScript adapter and driver types
 ```
 
-It prints each `tool_result` as the model would see it, the screenshot's bytes elided. Six calls are answered: `screenshot`, a `left_click` at the screen's centre, `type`, `key`, `wait` and a second `screenshot` (retried for a few seconds if the server lags). Two are refused with `is_error`: a `left_click` one pixel off the screen, and `zoom`, which the driver leaves out.
+It sends calls through the same Kimi dispatch adapter used by `run` and prints each `tool_result` as the model would see it, with screenshot bytes elided. Six calls are answered: `screenshot`, a `left_click` at the screen's centre, `type`, `key`, `wait` and a second `screenshot` (retried for a few seconds if the server lags). Two are refused with `is_error`: a `left_click` one pixel off the screen, and `zoom`, which the driver leaves out.
 
 It exits non-zero if any call comes back differently.
 
 ## What the example driver implements, and what it leaves out
 
-Implemented: `screenshot` (the whole screen, as it is), `left_click`, `right_click`, `double_click`, `triple_click`, `mouse_move`, `scroll`, `type`, `key` (a name such as `Return` or `Page_Up`, a single character, or a chord such as `ctrl+s`) and `wait`. The SDK supplies the rest: the tool schemas, the refusal of tools the driver doesn't implement, and the tool runner.
+Implemented: `screenshot` (the whole screen, as it is), `left_click`, `right_click`, `double_click`, `triple_click`, `mouse_move`, `scroll`, `type`, `key` (a name such as `Return` or `Page_Up`, a single character, or a chord such as `ctrl+s`) and `wait`. The Kimi adapter supplies the ordinary tool schemas and bounded tool loop. The SDK driver supplies validation, confirmation, and refusal of disabled tools.
 
 A click without a coordinate acts where the pointer last was, and a modifier chord in a click's `text` is held during it.
 

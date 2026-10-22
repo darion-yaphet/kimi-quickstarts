@@ -1,13 +1,19 @@
 """Tests for Streamlit helper functions with edge case coverage."""
 
 import asyncio
+import os
+from types import SimpleNamespace
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 from browser_use_demo.loop import APIProvider
 from browser_use_demo.streamlit import (
+    ANTHROPIC_API_KEY_FILE,
+    KIMI_API_KEY_FILE,
+    _provider_api_key,
     authenticate,
     get_or_create_event_loop,
+    handle_provider_change,
     setup_state,
 )
 
@@ -103,6 +109,57 @@ class TestSetupState:
                 setup_state()
 
     # Test removed - BrowserTool no longer reads dimensions from environment
+
+
+class TestProviderCredentials:
+    def test_kimi_key_prefers_kimi_environment(self):
+        with patch.dict(
+            os.environ,
+            {"KIMI_API_KEY": "kimi-key", "ANTHROPIC_API_KEY": "anthropic-key"},
+            clear=True,
+        ):
+            assert _provider_api_key(APIProvider.KIMI) == "kimi-key"
+
+    def test_kimi_never_reads_anthropic_persisted_key(self):
+        def read_key(path):
+            if path == KIMI_API_KEY_FILE:
+                return "kimi-file-key"
+            if path == ANTHROPIC_API_KEY_FILE:
+                return "old-anthropic-key"
+            return ""
+
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch("browser_use_demo.streamlit._read_key_file", side_effect=read_key),
+        ):
+            assert _provider_api_key(APIProvider.KIMI) == "kimi-file-key"
+
+    def test_provider_switch_replaces_credentials_and_clears_history(self):
+        state = SimpleNamespace(
+            provider=APIProvider.KIMI,
+            credential_provider=APIProvider.ANTHROPIC,
+            api_key="old-anthropic-key",
+            base_url="",
+            model="claude-sonnet-4-5-20250929",
+            messages=[{"role": "user", "content": "secret history"}],
+            tools={"tool": object()},
+            rendered_message_count=3,
+            active_messages=["partial"],
+            last_error={"message": "old"},
+            chat_disabled=True,
+        )
+        with patch(
+            "browser_use_demo.streamlit._provider_api_key", return_value="kimi-key"
+        ):
+            handle_provider_change(state)
+
+        assert state.api_key == "kimi-key"
+        assert state.credential_provider == APIProvider.KIMI
+        assert state.messages == []
+        assert state.tools == {}
+        assert state.active_messages == []
+        assert state.last_error is None
+        assert state.chat_disabled is False
 
 
 class TestGetOrCreateEventLoop:
@@ -220,7 +277,7 @@ class TestAuthenticate:
         authenticate()
 
         mock_error.assert_called_once_with(
-            "Please provide your Anthropic API key in the sidebar"
+            "Please provide an API key for anthropic in the sidebar"
         )
         mock_stop.assert_called_once()
         # Function doesn't return after stop() in real scenario

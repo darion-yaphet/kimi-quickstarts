@@ -4,9 +4,8 @@ Usage:
 
     python exercise.py
 
-The script connects the example driver to the VNC server at `VNC_HOST:VNC_PORT` and sends the toolset the `tool_use`
-calls a model would send, through the entry point the tool runner uses. It prints each `tool_result` as the model would
-see it, then checks it:
+The script connects the example driver to the VNC server at `VNC_HOST:VNC_PORT` and sends the `tool_use` calls a model
+would send through the Kimi dispatch adapter. It prints each `tool_result` as the model would see it, then checks it:
 
 - `screenshot` (a PNG of the whole screen), `left_click` at the screen's centre, `type`, `key`, `wait` and a second
   `screenshot` showing what the typing did: all answered;
@@ -27,8 +26,9 @@ import sys
 from typing import Any
 
 from anthropic.tools.computer import BetaAbstractComputerToolset20260801
-from anthropic.types.beta import BetaToolResultBlockParam, BetaToolUseBlock
+from anthropic.types.beta import BetaToolResultBlockParam
 
+from kimi_adapter import dispatch
 from vnc_computer import VncComputer
 
 
@@ -36,8 +36,7 @@ def call(
     computer: BetaAbstractComputerToolset20260801, name: str, input: dict[str, object]
 ) -> BetaToolResultBlockParam:
     """Send one tool call as the model would, and print the result as the model would see it."""
-    tool_use = BetaToolUseBlock(type="tool_use", id=f"toolu_{name}", name=name, input=input, toolset_name="computer")
-    result = computer.tool_result(tool_use)
+    result = dispatch(computer, f"toolu_{name}", name, input)
     print(f"\n{name} {json.dumps(input)} -> {'refused' if result.get('is_error') else 'answered'}")
     for block in blocks_of(result):
         if block.get("type") == "image":

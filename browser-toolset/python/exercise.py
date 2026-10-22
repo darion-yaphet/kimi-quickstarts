@@ -5,8 +5,8 @@ Usage:
     python exercise.py
 
 The script serves a small page on localhost, launches the example driver with a URL policy that admits that page and
-nothing else, and sends the toolset the `tool_use` calls a model would send, through the entry point the tool runner
-uses. It prints each `tool_result` as the model would see it, then checks it:
+nothing else, and sends the `tool_use` calls a model would send through the Kimi dispatch adapter. It prints each
+`tool_result` as the model would see it, then checks it:
 
 - `navigate` to the page, `read_page`, `left_click` on a `ref_N` from the read and `get_page_text` showing what the
   click did: all answered;
@@ -34,10 +34,11 @@ from anthropic.tools.browser import (
     BetaURLContext,
     BetaURLPolicy,
 )
-from anthropic.types.beta import BetaToolResultBlockParam, BetaToolUseBlock
+from anthropic.types.beta import BetaToolResultBlockParam
 from typing_extensions import override
 
 from cdp_browser import CdpBrowser
+from kimi_adapter import dispatch, portable_content
 
 PAGE = b"""<!doctype html>
 <title>Exercise page</title>
@@ -76,8 +77,8 @@ def only(origin: str) -> BetaURLPolicy:
 
 def call(browser: BetaAbstractBrowserToolset20260801, name: str, input: dict[str, object]) -> BetaToolResultBlockParam:
     """Send one tool call as the model would, and print the result as the model would see it."""
-    tool_use = BetaToolUseBlock(type="tool_use", id=f"toolu_{name}", name=name, input=input, toolset_name="browser")
-    result = browser.tool_result(tool_use)
+    result = dispatch(browser, f"toolu_{name}", name, input)
+    result["content"] = portable_content(result)
     print(f"\n{name} {json.dumps(input)} -> {'refused' if result.get('is_error') else 'answered'}")
     for block in blocks_of(result):
         print("  " + json.dumps(block))

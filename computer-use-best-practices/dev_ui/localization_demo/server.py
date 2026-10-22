@@ -18,6 +18,7 @@ see the two coordinate spaces side by side.
 """
 
 import io
+import os
 import re
 import time
 from pathlib import Path
@@ -38,7 +39,13 @@ app = FastAPI()
 _static = Path(__file__).parent / "static"
 _assets = Path(__file__).parent.parent / "assets"
 app.mount("/assets", StaticFiles(directory=_assets), name="assets")
-_client = anthropic.Anthropic()
+
+
+def _make_client() -> anthropic.Anthropic:
+    return anthropic.Anthropic(
+        api_key=os.environ.get("ANTHROPIC_API_KEY"),
+        base_url=os.environ.get("ANTHROPIC_BASE_URL", constants.cfg.api_base_url),
+    )
 
 _POINT_AT_TOOL: ToolParam = {
     "name": "point_at",
@@ -87,7 +94,7 @@ def index() -> FileResponse:
 def meta() -> dict[str, Any]:
     return {
         "models": [m.value for m in constants.Model] + list(constants.cfg.extra_models),
-        "default_model": constants.Model.HAIKU_4_5.value,
+        "default_model": constants.Model.KIMI_FOR_CODING.value,
         "thinking_efforts": list(get_args(constants.ThinkingEffort)),
         "effort_supported_models": sorted(constants.EFFORT_SUPPORTED_MODELS),
         "default_prompt_template": DEFAULT_PROMPT_TEMPLATE,
@@ -99,7 +106,7 @@ def meta() -> dict[str, Any]:
 def localize(
     image: Annotated[UploadFile, File()],
     label: Annotated[str, Form()],
-    model: Annotated[str, Form()] = constants.Model.HAIKU_4_5.value,
+    model: Annotated[str, Form()] = constants.Model.KIMI_FOR_CODING.value,
     thinking_effort: Annotated[constants.ThinkingEffort, Form()] = "off",
     prompt_template: Annotated[str, Form()] = DEFAULT_PROMPT_TEMPLATE,
 ) -> JSONResponse:
@@ -110,7 +117,9 @@ def localize(
     b64, (sent_w, sent_h) = resize_and_encode(pil, min_bytes=0)
 
     try:
-        effort_kwargs = _effort_kwargs(model, thinking_effort)
+        effort_kwargs = (
+            {} if constants.cfg.provider == "kimi" else _effort_kwargs(model, thinking_effort)
+        )
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
 
@@ -125,7 +134,7 @@ def localize(
         )
 
     start = time.monotonic()
-    response = _client.messages.create(
+    response = _make_client().messages.create(
         model=model,
         max_tokens=2048,
         tools=[_POINT_AT_TOOL],

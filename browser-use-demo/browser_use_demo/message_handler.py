@@ -55,22 +55,36 @@ class ResponseProcessor:
         has_tools = False
 
         for content_block in response.content:
+            dumped = (
+                content_block.model_dump(exclude_none=True)
+                if hasattr(content_block, "model_dump")
+                else None
+            )
+            if isinstance(dumped, dict):
+                block_dict = dumped
+            elif isinstance(content_block, dict):
+                block_dict = dict(content_block)
+            else:
+                block_dict = {"type": content_block.type}
+
             if content_block.type == "text":
                 has_text = True
-                assistant_content.append({
-                    "type": "text",
-                    "text": content_block.text
-                })
+                block_dict.setdefault("text", content_block.text)
+                assistant_content.append(block_dict)
             elif content_block.type == "tool_use":
                 has_tools = True
-                tool_use_dict = {
+                tool_use_dict = block_dict or {
                     "type": "tool_use",
                     "id": content_block.id,
                     "name": content_block.name,
-                    "input": content_block.input
+                    "input": content_block.input,
                 }
                 assistant_content.append(tool_use_dict)
                 tool_uses.append(tool_use_dict)
+            else:
+                # Kimi may return signed thinking blocks before a tool call.
+                # Replay them byte-for-byte through the parsed SDK structure.
+                assistant_content.append(block_dict)
 
         return ProcessedResponse(
             assistant_content=assistant_content,

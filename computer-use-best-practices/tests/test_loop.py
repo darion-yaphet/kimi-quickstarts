@@ -2,7 +2,7 @@ from types import SimpleNamespace
 from typing import Any, ClassVar
 
 import anthropic
-import httpx
+import httpx2 as httpx
 import pytest
 from anthropic.types import ImageBlockParam, MessageParam
 

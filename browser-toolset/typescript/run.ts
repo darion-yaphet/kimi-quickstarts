@@ -1,13 +1,13 @@
 #!/usr/bin/env -S npx --no-install tsx
 /**
- * Run Claude's browser toolset from the command line, with the example driver.
+ * Run Kimi Code with ordinary browser tools backed by the example CDP driver.
  *
  * Usage:
  *
  *     npx tsx run.ts "Open example.com and tell me the heading"
  *
- * It builds the example driver, hands it to the tool runner, and prints each of the model's messages until the model
- * finishes. It uses only the SDK's abstract toolset, so any other driver swaps in the same way.
+ * It builds the example driver, exposes its actions as ordinary custom tools, and prints each model response until the
+ * model finishes.
  *
  * Requires: `npm install` in this folder (`@anthropic-ai/sdk`, `ws`, `tsx`), cdp-browser.ts next to this file, a Chromium
  * binary (`CHROME_PATH`, or `google-chrome` / `chromium` on `PATH`) and an API key in `ANTHROPIC_API_KEY`.
@@ -23,6 +23,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { ToolError, type BetaURLPolicy } from '@anthropic-ai/sdk/helpers/beta/toolsets';
 import { CdpBrowser } from './cdp-browser.js';
+import { runLoop } from './kimi-adapter.js';
 
 /** A comma-separated environment variable as a lower-cased list, blanks dropped. */
 export function envList(name: string, fallback: string): string[] {
@@ -55,22 +56,23 @@ export function examplePolicy(allowedHosts: string[]): BetaURLPolicy {
 
 async function main(): Promise<void> {
   const task = process.argv.slice(2).join(' ') || 'Open example.com and tell me the page heading.';
-  const client = new Anthropic();
+  const client = new Anthropic({
+    apiKey: process.env['ANTHROPIC_API_KEY'],
+    baseURL: process.env['ANTHROPIC_BASE_URL'] ?? 'https://api.kimi.com/coding/',
+  });
   const browser = await CdpBrowser.launch({
     headless: process.env['HEADLESS'] !== '0',
     urlPolicy: examplePolicy(envList('ALLOWED_DOMAINS', 'example.com,iana.org')),
   });
-  // The tool runner never closes the browser. The finally closes it, whether the loop ends or fails.
+  // The model loop does not own the browser. The finally closes it whether the loop ends or fails.
   try {
-    const runner = client.beta.messages.toolRunner({
-      model: process.env['MODEL'] ?? 'claude-sonnet-5-5',
-      max_tokens: 1024,
-      tools: [browser],
-      messages: [{ role: 'user', content: task }],
-    });
-    for await (const message of runner) {
-      console.dir(message, { depth: 4 });
-    }
+    await runLoop(
+      client,
+      browser,
+      task,
+      process.env['MODEL'] ?? 'kimi-for-coding',
+      Number(process.env['MAX_TOOL_TURNS'] ?? 20),
+    );
   } finally {
     await browser.close();
   }

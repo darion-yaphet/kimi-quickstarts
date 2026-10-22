@@ -69,10 +69,17 @@ interface FileUpload {
   fileSize?: number;
 }
 
+const defaultModel =
+  process.env.NEXT_PUBLIC_ANTHROPIC_MODEL || "kimi-for-coding";
+
 const models: Model[] = [
-  { id: "claude-haiku-4-5-20251001", name: "Claude Haiku 4.5" },
-  { id: "claude-sonnet-5-5", name: "Claude Sonnet 5.5" },
-];
+  { id: defaultModel, name: `Kimi (${defaultModel})` },
+  { id: "k3-256k", name: "Kimi K3 256K" },
+  { id: "kimi-for-coding-highspeed", name: "Kimi Coding HighSpeed" },
+].filter(
+  (model, index, allModels) =>
+    allModels.findIndex((candidate) => candidate.id === model.id) === index,
+);
 
 // Updated APIResponse interface
 interface APIResponse {
@@ -197,7 +204,7 @@ export default function AIChat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedModel, setSelectedModel] = useState("claude-sonnet-5-5");
+  const [selectedModel, setSelectedModel] = useState(defaultModel);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chartEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);

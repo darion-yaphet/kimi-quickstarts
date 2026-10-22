@@ -35,6 +35,7 @@ from computer_use_demo.tools import ToolResult, ToolVersion
 
 PROVIDER_TO_DEFAULT_MODEL_NAME: dict[APIProvider, str] = {
     APIProvider.ANTHROPIC: "claude-opus-4-8",
+    APIProvider.KIMI: "kimi-for-coding",
     APIProvider.BEDROCK: "anthropic.claude-3-5-sonnet-20241022-v2:0",
     APIProvider.VERTEX: "claude-3-5-sonnet-v2@20241022",
 }
@@ -78,6 +79,16 @@ HAIKU_4_5 = ModelConfig(
     thinking_modes=("off",),
 )
 
+# Kimi's Anthropic-compatible endpoint supports ordinary custom tools, but not
+# Claude's thinking controls or beta feature headers. The loop adapts this
+# legacy computer-tool group to portable custom tool definitions for Kimi.
+KIMI = ModelConfig(
+    tool_version="computer_use_20250124",
+    max_output_tokens=64_000,
+    default_output_tokens=1024 * 16,
+    thinking_modes=("off",),
+)
+
 # Claude Opus 4.6 / Sonnet 4.6 introduce adaptive thinking (the model decides
 # how much to reason, steered by an effort level). They still accept the older
 # extended-thinking budget for backwards compatibility, but adaptive is the
@@ -109,6 +120,7 @@ DEFAULT_MODEL_CONF = ModelConfig(
 )
 
 MODEL_TO_MODEL_CONF: dict[str, ModelConfig] = {
+    "kimi-for-coding": KIMI,
     "claude-opus-4-1-20250805": CLAUDE_4,
     "claude-opus-4-1": CLAUDE_4,
     "claude-sonnet-4-20250514": CLAUDE_4,
@@ -149,6 +161,13 @@ def _lookup_model_conf(model: str) -> ModelConfig:
     return DEFAULT_MODEL_CONF
 
 
+def _active_model_conf(model: str) -> ModelConfig:
+    """Return provider-aware model capabilities for the current UI session."""
+    if st.session_state.provider == APIProvider.KIMI:
+        return KIMI
+    return _lookup_model_conf(model)
+
+
 CONFIG_DIR = PosixPath("~/.anthropic").expanduser()
 API_KEY_FILE = CONFIG_DIR / "api_key"
 STREAMLIT_STYLE = """
@@ -169,7 +188,7 @@ STREAMLIT_STYLE = """
 </style>
 """
 
-WARNING_TEXT = "⚠️ Security Alert: Never provide access to sensitive accounts or data, as malicious web content can hijack Claude's behavior"
+WARNING_TEXT = "⚠️ Security Alert: Never provide access to sensitive accounts or data, as malicious web content can hijack the agent's behavior"
 INTERRUPT_TEXT = "(user stopped or interrupted and wrote the following)"
 INTERRUPT_TOOL_ERROR = "human stopped or interrupted tool execution"
 
@@ -180,18 +199,31 @@ class Sender(StrEnum):
     TOOL = "tool"
 
 
+def _key_storage_name(provider: APIProvider | str) -> str:
+    return "kimi_api_key" if provider == APIProvider.KIMI else "api_key"
+
+
+def _load_api_key(provider: APIProvider | str) -> str:
+    # Kimi must never inherit a persisted key from the upstream Claude demo.
+    if provider == APIProvider.KIMI:
+        return (
+            os.getenv("KIMI_API_KEY")
+            or os.getenv("ANTHROPIC_API_KEY")
+            or load_from_storage("kimi_api_key")
+            or ""
+        )
+    return load_from_storage("api_key") or ""
+
+
 def setup_state():
     if "messages" not in st.session_state:
         st.session_state.messages = []
-    if "api_key" not in st.session_state:
-        # Try to load API key from file first, then environment
-        st.session_state.api_key = load_from_storage("api_key") or os.getenv(
-            "ANTHROPIC_API_KEY", ""
-        )
     if "provider" not in st.session_state:
         st.session_state.provider = (
-            os.getenv("API_PROVIDER", "anthropic") or APIProvider.ANTHROPIC
+            os.getenv("API_PROVIDER", "kimi") or APIProvider.KIMI
         )
+    if "api_key" not in st.session_state:
+        st.session_state.api_key = _load_api_key(st.session_state.provider)
     if "provider_radio" not in st.session_state:
         st.session_state.provider_radio = st.session_state.provider
     if "model" not in st.session_state:
@@ -221,14 +253,22 @@ def _reset_model():
     st.session_state.model = PROVIDER_TO_DEFAULT_MODEL_NAME[
         cast(APIProvider, st.session_state.provider)
     ]
+    if st.session_state.provider == APIProvider.KIMI:
+        st.session_state.model = (
+            os.getenv("KIMI_MODEL")
+            or os.getenv("ANTHROPIC_MODEL")
+            or st.session_state.model
+        )
     _reset_model_conf()
 
 
 def _reset_model_conf():
-    model_conf = _lookup_model_conf(st.session_state.model)
+    model_conf = _active_model_conf(st.session_state.model)
 
     # If we're in radio selection mode, use the selected tool version
-    if hasattr(st.session_state, "tool_versions"):
+    if st.session_state.provider != APIProvider.KIMI and hasattr(
+        st.session_state, "tool_versions"
+    ):
         st.session_state.tool_version = st.session_state.tool_versions
     else:
         st.session_state.tool_version = model_conf.tool_version
@@ -247,7 +287,7 @@ async def main():
 
     st.markdown(STREAMLIT_STYLE, unsafe_allow_html=True)
 
-    st.title("Claude Computer Use Demo")
+    st.title("Kimi Computer Use Demo")
 
     if not os.getenv("HIDE_WARNING", False):
         st.warning(WARNING_TEXT)
@@ -256,8 +296,12 @@ async def main():
 
         def _reset_api_provider():
             if st.session_state.provider_radio != st.session_state.provider:
-                _reset_model()
                 st.session_state.provider = st.session_state.provider_radio
+                st.session_state.messages = []
+                st.session_state.responses = {}
+                st.session_state.tools = {}
+                st.session_state.api_key = _load_api_key(st.session_state.provider)
+                _reset_model()
                 st.session_state.auth_validated = False
 
         provider_options = [option.value for option in APIProvider]
@@ -271,12 +315,19 @@ async def main():
 
         st.text_input("Model", key="model", on_change=_reset_model_conf)
 
-        if st.session_state.provider == APIProvider.ANTHROPIC:
+        if st.session_state.provider in (APIProvider.ANTHROPIC, APIProvider.KIMI):
             st.text_input(
-                "Claude API Key",
+                (
+                    "Kimi API Key"
+                    if st.session_state.provider == APIProvider.KIMI
+                    else "Claude API Key"
+                ),
                 type="password",
                 key="api_key",
-                on_change=lambda: save_to_storage("api_key", st.session_state.api_key),
+                on_change=lambda: save_to_storage(
+                    _key_storage_name(st.session_state.provider),
+                    st.session_state.api_key,
+                ),
             )
 
         st.number_input(
@@ -294,21 +345,31 @@ async def main():
             ),
         )
         st.checkbox("Hide screenshots", key="hide_images")
-        st.checkbox(
-            "Enable token-efficient tools beta", key="token_efficient_tools_beta"
-        )
-        versions = get_args(ToolVersion)
-        st.radio(
-            "Tool Versions",
-            key="tool_versions",
-            options=versions,
-            index=versions.index(st.session_state.tool_version),
-            on_change=lambda: setattr(
-                st.session_state,
-                "tool_version",
-                st.session_state.get("tool_versions", st.session_state.tool_version),
-            ),
-        )
+        if st.session_state.provider == APIProvider.KIMI:
+            st.session_state.token_efficient_tools_beta = False
+            st.session_state.tool_version = KIMI.tool_version
+            st.caption(
+                "Kimi compatibility mode uses portable custom tools; Claude "
+                "beta options and thinking controls are disabled."
+            )
+        else:
+            st.checkbox(
+                "Enable token-efficient tools beta", key="token_efficient_tools_beta"
+            )
+            versions = get_args(ToolVersion)
+            st.radio(
+                "Tool Versions",
+                key="tool_versions",
+                options=versions,
+                index=versions.index(st.session_state.tool_version),
+                on_change=lambda: setattr(
+                    st.session_state,
+                    "tool_version",
+                    st.session_state.get(
+                        "tool_versions", st.session_state.tool_version
+                    ),
+                ),
+            )
 
         st.number_input("Max Output Tokens", key="output_tokens", step=1)
 
@@ -319,7 +380,7 @@ async def main():
         # current model string (not cached state) and any selection that the
         # current model doesn't support is reset to its default, so an
         # unsupported mode can never be sent to the API for a known model.
-        model_conf = _lookup_model_conf(st.session_state.model)
+        model_conf = _active_model_conf(st.session_state.model)
         thinking_modes = model_conf.thinking_modes
         st.session_state.thinking_modes = thinking_modes
         # The three thinking widgets below render conditionally, and Streamlit
@@ -389,9 +450,7 @@ async def main():
             st.session_state.auth_validated = True
 
     chat, http_logs = st.tabs(["Chat", "HTTP Exchange Logs"])
-    new_message = st.chat_input(
-        "Type a message to send to Claude to control the computer..."
-    )
+    new_message = st.chat_input("Describe a task for the desktop agent...")
 
     with chat:
         # render past chats
@@ -456,7 +515,7 @@ async def main():
                 ),
                 api_key=st.session_state.api_key,
                 only_n_most_recent_images=st.session_state.only_n_most_recent_images,
-                tool_version=st.session_state.tool_versions,
+                tool_version=st.session_state.tool_version,
                 max_tokens=st.session_state.output_tokens,
                 thinking_mode=st.session_state.thinking_mode,
                 thinking_effort=st.session_state.thinking_effort,
@@ -501,9 +560,10 @@ def track_sampling_loop():
 
 
 def validate_auth(provider: APIProvider, api_key: str | None):
-    if provider == APIProvider.ANTHROPIC:
+    if provider in (APIProvider.ANTHROPIC, APIProvider.KIMI):
         if not api_key:
-            return "Enter your Claude API key in the sidebar to continue."
+            provider_name = "Kimi" if provider == APIProvider.KIMI else "Claude"
+            return f"Enter your {provider_name} API key in the sidebar to continue."
     if provider == APIProvider.BEDROCK:
         import boto3
 

@@ -35,6 +35,7 @@ load_dotenv(REPO_ROOT / ".env")
 
 
 class Model(StrEnum):
+    KIMI_FOR_CODING = "kimi-for-coding"
     HAIKU_4_5 = "claude-haiku-4-5"
     SONNET_4_6 = "claude-sonnet-4-6"
     OPUS_4_6 = "claude-opus-4-6"
@@ -44,7 +45,7 @@ class Model(StrEnum):
 ThinkingEffort = Literal["off", "low", "medium", "high", "max"]
 ImagePruneStrategy = Literal["none", "simple", "interval"]
 AdvisorCaching = Literal["off", "5m", "1h"]
-Provider = Literal["anthropic", "vertex", "bedrock"]
+Provider = Literal["kimi", "anthropic", "vertex", "bedrock"]
 
 
 AUTOCOMPACTION_MIN_TRIGGER = 50_000
@@ -53,6 +54,7 @@ AUTOCOMPACTION_MIN_TRIGGER = 50_000
 # trips empirically at ~21 MB of base64 image data; Bedrock at ~13 MB. The
 # values below leave headroom for system/tool/text content. None = no cap.
 PROVIDER_MAX_MESSAGE_MB: dict[Provider, int | None] = {
+    "kimi": None,
     "anthropic": None,
     "vertex": 18,
     "bedrock": 11,
@@ -88,11 +90,14 @@ HostedComputer = Literal["explicit", "toolset", "dated"]
 
 @dataclass(frozen=True)
 class Config:
-    # Which API surface to call. "anthropic" = first-party api.anthropic.com
-    # via ANTHROPIC_API_KEY; "vertex" = AnthropicVertex (GOOGLE_CLOUD_PROJECT/
-    # GOOGLE_CLOUD_REGION); "bedrock" = AnthropicBedrock (standard AWS creds +
-    # AWS_REGION).
-    provider: Provider = "anthropic"
+    # Which API surface to call. "kimi" uses Kimi Code's Anthropic-compatible
+    # endpoint; the other values retain the upstream Anthropic, Vertex, and
+    # Bedrock paths.
+    provider: Provider = "kimi"
+
+    # Kimi Code's Anthropic-compatible Messages endpoint. Override with
+    # CU_API_BASE_URL or ANTHROPIC_BASE_URL for a regional endpoint or proxy.
+    api_base_url: str = "https://api.kimi.com/coding/"
 
     # Send the computer tool as the server-hosted declaration (the toolset on
     # the first-party API, the dated tool elsewhere -- see `hosted_computer`)
@@ -109,7 +114,7 @@ class Config:
     extra_models: tuple[str, ...] = ()
     # Reasoning effort used when neither --thinking nor a per-model entry in
     # thinking_effort applies.
-    default_thinking_effort: ThinkingEffort = "medium"
+    default_thinking_effort: ThinkingEffort = "off"
 
     # JPEG quality for all screenshots sent to the model. 75 matches the value
     # the desktop app's Swift encoder uses and is a good size/fidelity trade.
@@ -225,7 +230,14 @@ class Config:
             )
             object.__setattr__(self, "autocompaction_trigger_tokens", AUTOCOMPACTION_MIN_TRIGGER)
 
-        if self.provider != "anthropic":
+        if self.provider == "kimi":
+            # Kimi supports standard Messages, image and custom-tool blocks.
+            # Claude-hosted features are removed from requests in this mode.
+            object.__setattr__(self, "use_hosted_computer_tool", False)
+            object.__setattr__(self, "enable_advisor_tool", False)
+            object.__setattr__(self, "enable_autocompaction", False)
+
+        if self.provider not in {"anthropic", "kimi"}:
             first_party_only = []
 
             if self.enable_advisor_tool:
@@ -249,6 +261,8 @@ class Config:
         served by the first-party API only; Vertex and Bedrock keep the dated
         tool until they gain toolset parity."""
         if not self.use_hosted_computer_tool:
+            return "explicit"
+        if self.provider == "kimi":
             return "explicit"
         return "toolset" if self.provider == "anthropic" else "dated"
 

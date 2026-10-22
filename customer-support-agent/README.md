@@ -1,4 +1,14 @@
-# Claude Customer Support Agent
+# Kimi Customer Support Agent
+
+This fork defaults to Kimi's Anthropic-compatible endpoint and `kimi-for-coding`.
+Copy `.env.example` to `.env.local` and set `KIMI_API_KEY`, then run `npm ci`
+and `npm run dev`. Alternatively use the repository's `scripts/kimi-run` launcher.
+AWS retrieval is off by default (`ENABLE_RAG=false`). To enable it, configure
+the AWS credentials, Bedrock region and knowledge base ID described below, then
+set `ENABLE_RAG=true`. Without retrieval, the assistant can report missing
+knowledge and suggest human support; it does not invent a knowledge base.
+The following upstream AWS setup instructions remain applicable to that optional
+retrieval path. Use a Kimi key for model generation.
 
 An advanced, fully customizable customer support chat interface powered by Claude and leveraging Amazon Bedrock Knowledge Bases for knowledge retrieval.
 ![preview](tutorial/preview.png)

@@ -61,7 +61,7 @@ def main() -> None:
     parser.add_argument(
         "--model",
         choices=[m.value for m in Model] + list(cfg.extra_models),
-        default=Model.SONNET_4_6.value,
+        default=Model.KIMI_FOR_CODING.value,
     )
     parser.add_argument("--max-iters", type=int, default=cfg.default_max_iters)
     parser.add_argument(
