@@ -20,15 +20,48 @@ from prompts import get_initializer_prompt, get_coding_prompt, copy_spec_to_proj
 # Configuration
 AUTO_CONTINUE_DELAY_SECONDS = 3
 MINIMUM_FEATURE_COUNT = 200
+DEFAULT_MAX_CONSECUTIVE_FAILURES = 3
+
+
+def _load_valid_feature_list(project_dir: Path) -> Optional[list[dict]]:
+    """Load a structurally valid, non-empty feature list."""
+    feature_list_path = project_dir / "feature_list.json"
+    if not feature_list_path.is_file():
+        return None
+
+    try:
+        features = json.loads(feature_list_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+
+    if not isinstance(features, list) or not features:
+        return None
+    if not all(
+        isinstance(feature, dict)
+        and isinstance(feature.get("category"), str)
+        and isinstance(feature.get("description"), str)
+        and isinstance(feature.get("steps"), list)
+        and isinstance(feature.get("passes"), bool)
+        for feature in features
+    ):
+        return None
+
+    return features
+
+
+def all_features_are_complete(project_dir: Path) -> bool:
+    """Return whether a valid, non-empty feature list is fully passing."""
+    features = _load_valid_feature_list(project_dir)
+    return (
+        features is not None
+        and len(features) >= MINIMUM_FEATURE_COUNT
+        and all(feature["passes"] for feature in features)
+    )
 
 
 def initialization_artifacts_are_valid(project_dir: Path) -> bool:
     """Return whether the initializer produced the files needed by later agents."""
-    feature_list_path = project_dir / "feature_list.json"
     required_text_files = (project_dir / "init.sh", project_dir / "README.md")
-
-    if not feature_list_path.is_file():
-        return False
 
     try:
         text_files_are_valid = all(
@@ -40,22 +73,8 @@ def initialization_artifacts_are_valid(project_dir: Path) -> bool:
     if not text_files_are_valid:
         return False
 
-    try:
-        features = json.loads(feature_list_path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
-        return False
-
-    if not isinstance(features, list) or len(features) < MINIMUM_FEATURE_COUNT:
-        return False
-
-    return all(
-        isinstance(feature, dict)
-        and isinstance(feature.get("category"), str)
-        and isinstance(feature.get("description"), str)
-        and isinstance(feature.get("steps"), list)
-        and isinstance(feature.get("passes"), bool)
-        for feature in features
-    )
+    features = _load_valid_feature_list(project_dir)
+    return features is not None and len(features) >= MINIMUM_FEATURE_COUNT
 
 
 async def run_agent_session(
@@ -136,6 +155,7 @@ async def run_autonomous_agent(
     project_dir: Path,
     model: str,
     max_iterations: Optional[int] = None,
+    max_consecutive_failures: int = DEFAULT_MAX_CONSECUTIVE_FAILURES,
 ) -> None:
     """
     Run the autonomous agent loop.
@@ -144,7 +164,11 @@ async def run_autonomous_agent(
         project_dir: Directory for the project
         model: Kimi model to use through Claude Code
         max_iterations: Maximum number of iterations (None for unlimited)
+        max_consecutive_failures: Stop after this many consecutive failed sessions
     """
+    if max_consecutive_failures < 1:
+        raise ValueError("max_consecutive_failures must be at least 1")
+
     print("\n" + "=" * 70)
     print("  AUTONOMOUS CODING AGENT DEMO")
     print("=" * 70)
@@ -154,6 +178,7 @@ async def run_autonomous_agent(
         print(f"Max iterations: {max_iterations}")
     else:
         print("Max iterations: Unlimited (will run until completion)")
+    print(f"Consecutive failure limit: {max_consecutive_failures}")
     print()
 
     # Create project directory
@@ -181,22 +206,29 @@ async def run_autonomous_agent(
 
     # Main loop
     iteration = 0
+    consecutive_failures = 0
+    termination_reason = ""
 
     while True:
-        iteration += 1
+        # Avoid creating another paid SDK session once the persisted source of
+        # truth says every feature has passed.
+        if all_features_are_complete(project_dir):
+            termination_reason = "All features are complete"
+            print(f"\n{termination_reason}")
+            break
 
         # Check max iterations
-        if max_iterations and iteration > max_iterations:
-            print(f"\nReached max iterations ({max_iterations})")
+        if max_iterations and iteration >= max_iterations:
+            termination_reason = f"Reached max iterations ({max_iterations})"
+            print(f"\n{termination_reason}")
             print("To continue, run the script again without --max-iterations")
             break
+
+        iteration += 1
 
         # Print session header
         is_first_run = not initialization_artifacts_are_valid(project_dir)
         print_session_header(iteration, is_first_run)
-
-        # Create client (fresh context)
-        client = create_client(project_dir, model)
 
         # Choose prompt based on session type
         if is_first_run:
@@ -204,19 +236,53 @@ async def run_autonomous_agent(
         else:
             prompt = get_coding_prompt()
 
-        # Run session with async context manager
-        async with client:
-            status, response = await run_agent_session(client, prompt, project_dir)
+        # Client construction and context startup can fail before
+        # run_agent_session gets a chance to normalize SDK errors.
+        try:
+            client = create_client(project_dir, model)
+            async with client:
+                status, _response = await run_agent_session(
+                    client, prompt, project_dir
+                )
+        except Exception as exc:
+            print(f"Session setup failed: {exc}")
+            status = "error"
+
+        if all_features_are_complete(project_dir):
+            termination_reason = "All features are complete"
+            print(f"\n{termination_reason}")
+            break
+
+        initializer_incomplete = (
+            is_first_run and not initialization_artifacts_are_valid(project_dir)
+        )
+        session_failed = status == "error" or initializer_incomplete
 
         # Handle status
-        if status == "continue":
+        if session_failed:
+            consecutive_failures += 1
+            if initializer_incomplete:
+                print("\nInitializer did not produce a valid project handoff")
+            else:
+                print("\nSession encountered an error")
+
+            if consecutive_failures >= max_consecutive_failures:
+                termination_reason = (
+                    "Reached consecutive failure limit "
+                    f"({max_consecutive_failures})"
+                )
+                print(f"{termination_reason}; stopping automatic retries")
+                break
+
+            print(
+                "Will retry with a fresh session "
+                f"({consecutive_failures}/{max_consecutive_failures})..."
+            )
+            await asyncio.sleep(AUTO_CONTINUE_DELAY_SECONDS)
+        else:
+            consecutive_failures = 0
             print(f"\nAgent will auto-continue in {AUTO_CONTINUE_DELAY_SECONDS}s...")
             print_progress_summary(project_dir)
-            await asyncio.sleep(AUTO_CONTINUE_DELAY_SECONDS)
-
-        elif status == "error":
-            print("\nSession encountered an error")
-            print("Will retry with a fresh session...")
             await asyncio.sleep(AUTO_CONTINUE_DELAY_SECONDS)
 
         # Small delay between sessions
@@ -226,9 +292,14 @@ async def run_autonomous_agent(
 
     # Final summary
     print("\n" + "=" * 70)
-    print("  SESSION COMPLETE")
+    if all_features_are_complete(project_dir):
+        print("  SESSION COMPLETE")
+    else:
+        print("  SESSION STOPPED")
     print("=" * 70)
     print(f"\nProject directory: {project_dir}")
+    if termination_reason:
+        print(f"Reason: {termination_reason}")
     print_progress_summary(project_dir)
 
     # Print instructions for running the generated application

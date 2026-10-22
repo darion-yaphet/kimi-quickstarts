@@ -46,6 +46,9 @@ python autonomous_agent_demo.py --project-dir ./my_project
 For testing with limited iterations:
 ```bash
 python autonomous_agent_demo.py --project-dir ./my_project --max-iterations 3
+
+# Override the automatic retry limit for SDK or initialization failures
+python autonomous_agent_demo.py --project-dir ./my_project --max-consecutive-failures 5
 ```
 
 ## Important Timing Expectations
@@ -143,6 +146,7 @@ The application will typically be available at `http://localhost:3000` or simila
 |--------|-------------|---------|
 | `--project-dir` | Directory for the project | `./autonomous_demo_project` |
 | `--max-iterations` | Max agent iterations | Unlimited |
+| `--max-consecutive-failures` | Consecutive SDK or initialization failures before stopping | `3` |
 | `--model` | Kimi model to use | `$ANTHROPIC_MODEL` or `kimi-for-coding` |
 
 ## Customization

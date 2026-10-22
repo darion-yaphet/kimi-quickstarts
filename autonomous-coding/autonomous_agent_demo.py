@@ -18,11 +18,19 @@ import asyncio
 import os
 from pathlib import Path
 
-from agent import run_autonomous_agent
+from agent import DEFAULT_MAX_CONSECUTIVE_FAILURES, run_autonomous_agent
 
 
 # Configuration
 DEFAULT_MODEL = os.environ.get("ANTHROPIC_MODEL", "kimi-for-coding")
+
+
+def positive_int(value: str) -> int:
+    """Parse a positive integer for retry and iteration limits."""
+    parsed = int(value)
+    if parsed < 1:
+        raise argparse.ArgumentTypeError("must be at least 1")
+    return parsed
 
 
 def parse_args() -> argparse.Namespace:
@@ -60,9 +68,19 @@ Environment Variables:
 
     parser.add_argument(
         "--max-iterations",
-        type=int,
+        type=positive_int,
         default=None,
         help="Maximum number of agent iterations (default: unlimited)",
+    )
+
+    parser.add_argument(
+        "--max-consecutive-failures",
+        type=positive_int,
+        default=DEFAULT_MAX_CONSECUTIVE_FAILURES,
+        help=(
+            "Stop after consecutive SDK or initialization failures "
+            f"(default: {DEFAULT_MAX_CONSECUTIVE_FAILURES})"
+        ),
     )
 
     parser.add_argument(
@@ -105,6 +123,7 @@ def main() -> None:
                 project_dir=project_dir,
                 model=args.model,
                 max_iterations=args.max_iterations,
+                max_consecutive_failures=args.max_consecutive_failures,
             )
         )
     except KeyboardInterrupt:
