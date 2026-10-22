@@ -76,6 +76,7 @@ async def sampling_loop(
     base_url: str | None = None,
     only_n_most_recent_images: int | None = None,
     max_tokens: int = 8192,
+    max_tool_turns: int = 20,
     browser_tool: Optional[BrowserTool] = None,
 ):
     """
@@ -84,6 +85,13 @@ async def sampling_loop(
     Args:
         browser_tool: Optional persistent browser tool instance. If not provided, creates a new one.
     """
+    if (
+        isinstance(max_tool_turns, bool)
+        or not isinstance(max_tool_turns, int)
+        or max_tool_turns < 1
+    ):
+        raise ValueError("max_tool_turns must be a positive integer")
+
     # Reuse existing browser tool or create a new one
     if browser_tool is None:
         # Create browser tool with standard dimensions
@@ -105,6 +113,7 @@ async def sampling_loop(
         text=f"{BROWSER_SYSTEM_PROMPT}{' ' + system_prompt_suffix if system_prompt_suffix else ''}",
     )
 
+    tool_turns = 0
     while True:
         if only_n_most_recent_images is not None:
             _maybe_filter_to_n_most_recent_images(
@@ -174,6 +183,12 @@ async def sampling_loop(
         processor = ResponseProcessor()
         processed = processor.process_response(response)
 
+        if processed.tool_uses and tool_turns >= max_tool_turns:
+            raise RuntimeError(
+                f"Browser tool turn limit reached ({max_tool_turns}); "
+                "no additional tools were executed."
+            )
+
         # Signed thinking is retained for API replay but not shown in the UI.
         for content_block in processed.assistant_content:
             if content_block.get("type") in {"text", "tool_use"}:
@@ -193,6 +208,7 @@ async def sampling_loop(
 
             # Add all tool results as a single user message
             builder.add_tool_results(messages, tool_results)
+            tool_turns += 1
 
             # Continue the loop to process any follow-up
         else:

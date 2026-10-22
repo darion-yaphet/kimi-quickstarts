@@ -521,6 +521,157 @@ class TestSamplingLoopIntegration:
 
         asyncio.run(run_test())
 
+    @pytest.mark.parametrize("invalid_limit", [0, -1, True, 1.5])
+    @patch("browser_use_demo.loop.Anthropic")
+    def test_max_tool_turns_requires_positive_integer(
+        self,
+        mock_anthropic,
+        invalid_limit,
+    ):
+        async def run_test():
+            with pytest.raises(
+                ValueError,
+                match="max_tool_turns must be a positive integer",
+            ):
+                await sampling_loop(
+                    model="kimi-for-coding",
+                    provider=APIProvider.KIMI,
+                    system_prompt_suffix="",
+                    messages=[{"role": "user", "content": "Test"}],
+                    output_callback=lambda _: None,
+                    tool_output_callback=lambda *_: None,
+                    api_response_callback=lambda *_: None,
+                    api_key="test-key",
+                    max_tool_turns=invalid_limit,
+                )
+
+            mock_anthropic.assert_not_called()
+
+        asyncio.run(run_test())
+
+    @patch("browser_use_demo.loop.Anthropic")
+    def test_tool_turn_limit_stops_before_unpaired_extra_tool_use(
+        self,
+        mock_anthropic,
+    ):
+        async def run_test():
+            mock_client = Mock()
+            mock_anthropic.return_value = mock_client
+            mock_client.messages.create.side_effect = [
+                Mock(
+                    content=[
+                        ToolUseBlock(
+                            type="tool_use",
+                            id="tool_1",
+                            name="browser",
+                            input={"action": "screenshot"},
+                        )
+                    ],
+                    stop_reason="tool_use",
+                ),
+                Mock(
+                    content=[
+                        ToolUseBlock(
+                            type="tool_use",
+                            id="tool_2",
+                            name="browser",
+                            input={"action": "screenshot"},
+                        )
+                    ],
+                    stop_reason="tool_use",
+                ),
+            ]
+            browser = AsyncMock()
+            browser.name = "browser"
+            browser.to_params = Mock(return_value={})
+            browser.return_value = ToolResult(output="screenshot complete")
+            messages = [{"role": "user", "content": "Keep browsing"}]
+
+            with pytest.raises(RuntimeError, match=r"tool turn limit reached \(1\)"):
+                await sampling_loop(
+                    model="kimi-for-coding",
+                    provider=APIProvider.KIMI,
+                    system_prompt_suffix="",
+                    messages=messages,
+                    output_callback=lambda _: None,
+                    tool_output_callback=lambda *_: None,
+                    api_response_callback=lambda *_: None,
+                    api_key="test-key",
+                    max_tool_turns=1,
+                    browser_tool=browser,
+                )
+
+            assert browser.await_count == 1
+            tool_use_ids = [
+                block["id"]
+                for message in messages
+                if message["role"] == "assistant"
+                for block in message["content"]
+                if block["type"] == "tool_use"
+            ]
+            tool_result_ids = [
+                block["tool_use_id"]
+                for message in messages
+                if message["role"] == "user" and isinstance(message["content"], list)
+                for block in message["content"]
+                if block["type"] == "tool_result"
+            ]
+            assert tool_use_ids == ["tool_1"]
+            assert tool_result_ids == tool_use_ids
+
+        asyncio.run(run_test())
+
+    @patch("browser_use_demo.loop.Anthropic")
+    def test_normal_text_response_can_finish_after_last_tool_turn(
+        self,
+        mock_anthropic,
+    ):
+        async def run_test():
+            mock_client = Mock()
+            mock_anthropic.return_value = mock_client
+            mock_client.messages.create.side_effect = [
+                Mock(
+                    content=[
+                        ToolUseBlock(
+                            type="tool_use",
+                            id="tool_1",
+                            name="browser",
+                            input={"action": "screenshot"},
+                        )
+                    ],
+                    stop_reason="tool_use",
+                ),
+                Mock(
+                    content=[TextBlock(type="text", text="Finished")],
+                    stop_reason="end_turn",
+                ),
+            ]
+            browser = AsyncMock()
+            browser.name = "browser"
+            browser.to_params = Mock(return_value={})
+            browser.return_value = ToolResult(output="screenshot complete")
+
+            messages = await sampling_loop(
+                model="kimi-for-coding",
+                provider=APIProvider.KIMI,
+                system_prompt_suffix="",
+                messages=[{"role": "user", "content": "Take one screenshot"}],
+                output_callback=lambda _: None,
+                tool_output_callback=lambda *_: None,
+                api_response_callback=lambda *_: None,
+                api_key="test-key",
+                max_tool_turns=1,
+                browser_tool=browser,
+            )
+
+            assert browser.await_count == 1
+            assert messages[-1] == {
+                "role": "assistant",
+                "content": [{"text": "Finished", "type": "text"}],
+            }
+
+        asyncio.run(run_test())
+
     @patch("browser_use_demo.loop.Anthropic")
     def test_sampling_loop_preserves_text_with_tools(self, mock_anthropic):
         """Test that text is preserved when tools are used."""
