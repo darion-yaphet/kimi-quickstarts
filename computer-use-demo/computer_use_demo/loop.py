@@ -124,6 +124,7 @@ async def sampling_loop(
         text=f"{SYSTEM_PROMPT}{' ' + system_prompt_suffix if system_prompt_suffix else ''}",
     )
 
+    raw_response = None
     for _ in range(max_tool_turns):
         enable_prompt_caching = False
         betas = [tool_group.beta_flag] if tool_group.beta_flag else []
@@ -302,6 +303,9 @@ async def sampling_loop(
 
         messages.append({"content": tool_result_content, "role": "user"})
 
+    # Positive validation above guarantees an iteration unless an earlier path
+    # returns. Keep that invariant explicit for static analysis as well.
+    assert raw_response is not None
     api_response_callback(
         raw_response.http_response.request,
         raw_response.http_response,

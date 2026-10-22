@@ -30,7 +30,7 @@ async def test_truncated_response_never_executes_partial_tools():
     tools.to_params.return_value = [{"name": "computer", "type": "computer_20250124"}]
     tools.run = mock.AsyncMock(return_value=mock.Mock(output="result", error=None, base64_image=None))
     callback = mock.Mock()
-    messages = [{"role": "user", "content": "Inspect"}]
+    messages: list[BetaMessageParam] = [{"role": "user", "content": "Inspect"}]
     with mock.patch("computer_use_demo.loop.Anthropic", return_value=client), mock.patch("computer_use_demo.loop.ToolCollection", return_value=tools):
         result = await sampling_loop(model="test", provider=APIProvider.KIMI, system_prompt_suffix="", messages=messages, output_callback=mock.Mock(), tool_output_callback=mock.Mock(), api_response_callback=callback, api_key="test", tool_version="computer_use_20250124")
     tools.run.assert_not_awaited()
@@ -53,7 +53,8 @@ async def test_tool_loop_stops_at_budget_with_complete_tool_results():
         result = await sampling_loop(model="test", provider=APIProvider.KIMI, system_prompt_suffix="", messages=[{"role": "user", "content": "Inspect"}], output_callback=mock.Mock(), tool_output_callback=mock.Mock(), api_response_callback=callback, api_key="test", tool_version="computer_use_20250124", max_tool_turns=1)
     assert client.messages.with_raw_response.create.call_count == 1
     assert tools.run.await_count == 1
-    assert result[-1]["content"][0]["tool_use_id"] == "step"
+    results = cast(list[dict[str, Any]], result[-1]["content"])
+    assert results[0]["tool_use_id"] == "step"
     assert "tool turn limit" in str(callback.call_args.args[2])
 
 
