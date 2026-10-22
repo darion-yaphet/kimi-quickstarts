@@ -399,39 +399,38 @@ export default function AIChat() {
 
     // Prepare all messages for the API request
     const apiMessages = [...messages, userMessage].map((msg) => {
+      let content: Message["content"] | Array<Record<string, unknown>>;
+
       if (msg.file) {
         if (msg.file.isText) {
           // For text files, decode the content before sending
           const decodedText = decodeURIComponent(atob(msg.file.base64));
-          return {
-            role: msg.role,
-            content: `File contents of ${msg.file.fileName}:\n\n${decodedText}\n\n${msg.content}`,
-          };
+          content = `File contents of ${msg.file.fileName}:\n\n${decodedText}\n\n${msg.content}`;
         } else {
           // Handle images as before
-          return {
-            role: msg.role,
-            content: [
-              {
-                type: "image",
-                source: {
-                  type: "base64",
-                  media_type: msg.file.mediaType,
-                  data: msg.file.base64,
-                },
+          content = [
+            {
+              type: "image",
+              source: {
+                type: "base64",
+                media_type: msg.file.mediaType,
+                data: msg.file.base64,
               },
-              {
-                type: "text",
-                text: msg.content,
-              },
-            ],
-          };
+            },
+            {
+              type: "text",
+              text: msg.content,
+            },
+          ];
         }
+      } else {
+        content = msg.content;
       }
-      // Handle text-only messages
+
       return {
         role: msg.role,
-        content: msg.content,
+        content,
+        ...(msg.chartData ? { chartData: msg.chartData } : {}),
       };
     });
 

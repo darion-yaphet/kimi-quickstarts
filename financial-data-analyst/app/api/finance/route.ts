@@ -267,6 +267,31 @@ const tools: ToolSchema[] = [
   },
 ];
 
+const serializeMessageForModel = (message: {
+  role: Anthropic.MessageParam["role"];
+  content: Anthropic.MessageParam["content"];
+  chartData?: unknown;
+}): Anthropic.MessageParam => {
+  if (message.role !== "assistant" || message.chartData === undefined) {
+    return { role: message.role, content: message.content };
+  }
+
+  const content: Exclude<Anthropic.MessageParam["content"], string> = Array.isArray(
+    message.content,
+  )
+    ? [...message.content]
+    : typeof message.content === "string" && message.content.length > 0
+      ? [{ type: "text" as const, text: message.content }]
+      : [];
+
+  content.push({
+    type: "text" as const,
+    text: `Previously generated chartData (use this structure when the user asks to modify the chart):\n${JSON.stringify(message.chartData)}`,
+  });
+
+  return { role: message.role, content };
+};
+
 export async function POST(req: NextRequest) {
   try {
     const { messages, fileData, model } = await req.json();
@@ -295,10 +320,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Convert all previous messages
-    let anthropicMessages = messages.map((msg: any) => ({
-      role: msg.role,
-      content: msg.content,
-    }));
+    let anthropicMessages = messages.map(serializeMessageForModel);
 
     // Handle file in the latest message
     if (fileData) {

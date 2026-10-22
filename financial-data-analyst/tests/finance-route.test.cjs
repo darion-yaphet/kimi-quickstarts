@@ -5,13 +5,16 @@ const path = require("node:path");
 const test = require("node:test");
 const ts = require("typescript");
 
-function loadRoute(modelResponse) {
+function loadRoute(modelResponse, onModelRequest = () => {}) {
   class MockAnthropic {
     static APIError = class APIError extends Error {};
     static AuthenticationError = class AuthenticationError extends Error {};
 
     messages = {
-      create: async () => modelResponse,
+      create: async (request) => {
+        onModelRequest(request);
+        return modelResponse;
+      },
     };
   }
 
@@ -49,6 +52,83 @@ function loadRoute(modelResponse) {
 
   return routeModule.exports;
 }
+
+test("a follow-up request includes the previous chart structure", async () => {
+  const previousChart = validChart("bar");
+  let modelRequest;
+  const { POST } = loadRoute(
+    {
+      stop_reason: "end_turn",
+      content: [{ type: "text", text: "Updated the chart." }],
+    },
+    (request) => {
+      modelRequest = request;
+    },
+  );
+
+  const response = await POST({
+    json: async () => ({
+      messages: [
+        { role: "user", content: "Create a revenue chart" },
+        {
+          role: "assistant",
+          content: "",
+          chartData: previousChart,
+        },
+        { role: "user", content: "Modify the previous chart" },
+      ],
+      model: "kimi-for-coding",
+    }),
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(modelRequest.messages[1].role, "assistant");
+  assert.ok(Array.isArray(modelRequest.messages[1].content));
+  const chartContext = modelRequest.messages[1].content.find(
+    (block) => block.type === "text" && block.text.includes("chartData"),
+  );
+  assert.ok(chartContext);
+  assert.match(chartContext.text, /"data":\[/);
+  assert.match(chartContext.text, /"config":\{/);
+  assert.match(chartContext.text, /"chartConfig":\{/);
+  assert.match(chartContext.text, /"revenue":125/);
+});
+
+test("plain text and image history are passed to the model unchanged", async () => {
+  const imageContent = [
+    {
+      type: "image",
+      source: {
+        type: "base64",
+        media_type: "image/png",
+        data: "aW1hZ2U=",
+      },
+    },
+    { type: "text", text: "Analyze this image" },
+  ];
+  const messages = [
+    { role: "user", content: "Plain text question" },
+    { role: "assistant", content: "Plain text answer" },
+    { role: "user", content: imageContent },
+  ];
+  let modelRequest;
+  const { POST } = loadRoute(
+    {
+      stop_reason: "end_turn",
+      content: [{ type: "text", text: "Image analyzed." }],
+    },
+    (request) => {
+      modelRequest = request;
+    },
+  );
+
+  const response = await POST({
+    json: async () => ({ messages, model: "kimi-for-coding" }),
+  });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(modelRequest.messages, messages);
+});
 
 async function postChart(chartInput) {
   const { POST } = loadRoute({
