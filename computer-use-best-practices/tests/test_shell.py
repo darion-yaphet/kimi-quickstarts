@@ -8,6 +8,21 @@ darwin_only = pytest.mark.skipif(sys.platform != "darwin", reason="sandbox-exec 
 
 
 @darwin_only
+@pytest.mark.parametrize("tool_class", [BashTool, PythonTool])
+def test_tool_cannot_read_parent_credentials(monkeypatch, tool_class):
+    names = ["KIMI_API_KEY", "ANTHROPIC_API_KEY", "AWS_SECRET_ACCESS_KEY", "CUSTOM_TOKEN", "BASH_ENV", "PYTHONPATH"]
+    for name in names:
+        monkeypatch.setenv(name, "credential-sentinel")
+    if tool_class is BashTool:
+        result = tool_class().execute(command='printf "%s" "${KIMI_API_KEY-unset}:${ANTHROPIC_API_KEY-unset}:${AWS_SECRET_ACCESS_KEY-unset}:${CUSTOM_TOKEN-unset}:${BASH_ENV-unset}:${PYTHONPATH-unset}"')
+    else:
+        result = tool_class().execute(code=f"import os; print([os.getenv(name, 'unset') for name in {names!r}])")
+    assert not result.is_error, result.error
+    assert "credential-sentinel" not in result.output
+    assert result.output.count("unset") == len(names)
+
+
+@darwin_only
 def test_bash_echo():
     res = BashTool().execute(command="echo hello")
     assert not res.is_error, res.error

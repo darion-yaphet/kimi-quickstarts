@@ -4,6 +4,13 @@ from typing import Any, Literal
 
 from .base import BaseAnthropicTool, CLIResult, ToolError, ToolResult
 
+# Model-generated commands need a desktop environment, never provider credentials
+# or interpreter startup hooks such as BASH_ENV and PYTHONPATH.
+_EXECUTION_ENVIRONMENT = {
+    "PATH", "HOME", "USER", "LOGNAME", "LANG", "LC_ALL", "LC_CTYPE",
+    "TZ", "TMPDIR", "TMP", "TEMP", "TERM", "DISPLAY", "XAUTHORITY",
+}
+
 
 class _BashSession:
     """A session of a bash shell."""
@@ -32,6 +39,7 @@ class _BashSession:
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            env={name: value for name, value in os.environ.items() if name in _EXECUTION_ENVIRONMENT},
         )
 
         self._started = True

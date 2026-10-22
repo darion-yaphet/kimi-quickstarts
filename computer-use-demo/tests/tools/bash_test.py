@@ -48,6 +48,22 @@ async def test_bash_tool_session_reuse(bash_tool):
 
 
 @pytest.mark.asyncio
+async def test_bash_does_not_inherit_credentials(bash_tool, monkeypatch):
+    monkeypatch.setenv("KIMI_API_KEY", "credential-sentinel")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "credential-sentinel")
+    monkeypatch.setenv("CUSTOM_TOKEN", "credential-sentinel")
+    monkeypatch.setenv("BASH_ENV", "/nonexistent/credential-sentinel")
+    monkeypatch.setenv("DISPLAY", ":99")
+    try:
+        result = await bash_tool(command='printf "%s" "${KIMI_API_KEY-unset}:${ANTHROPIC_API_KEY-unset}:${CUSTOM_TOKEN-unset}:${BASH_ENV-unset}:$DISPLAY"')
+        assert result.output == "unset:unset:unset:unset::99"
+        assert result.error == ""
+    finally:
+        if bash_tool._session:
+            bash_tool._session.stop()
+
+
+@pytest.mark.asyncio
 async def test_bash_tool_session_error(bash_tool):
     result = await bash_tool(command="invalid_command_that_does_not_exist")
     assert "command not found" in result.error

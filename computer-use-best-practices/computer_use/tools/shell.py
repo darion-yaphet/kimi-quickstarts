@@ -23,6 +23,10 @@ from .base import Tool
 from .result import ToolResult
 
 _TIMEOUT_S = 30
+_EXECUTION_ENVIRONMENT = {
+    "PATH", "HOME", "USER", "LOGNAME", "LANG", "LC_ALL", "LC_CTYPE",
+    "TZ", "TMPDIR", "TMP", "TEMP", "TERM",
+}
 
 
 def _run_sandboxed(argv: list[str], scratch: Path) -> ToolResult:
@@ -38,7 +42,10 @@ def _run_sandboxed(argv: list[str], scratch: Path) -> ToolResult:
         f"HOME={Path.home()}",
         *argv,
     ]
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=scratch)
+    proc = subprocess.Popen(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=scratch,
+        env={name: value for name, value in os.environ.items() if name in _EXECUTION_ENVIRONMENT},
+    )
     assert proc.stdout is not None
     buf = bytearray()
     deadline = time.monotonic() + _TIMEOUT_S
