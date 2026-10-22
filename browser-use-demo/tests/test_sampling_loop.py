@@ -3,15 +3,146 @@ Comprehensive tests for the sampling loop and message handling.
 """
 
 import asyncio
+from copy import deepcopy
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-from browser_use_demo.loop import APIProvider, sampling_loop
+from anthropic.types import TextBlock, ToolUseBlock
+from browser_use_demo.loop import (
+    APIProvider,
+    _maybe_filter_to_n_most_recent_images,
+    sampling_loop,
+)
 from browser_use_demo.message_handler import (
     MessageBuilder,
     ResponseProcessor,
 )
 from browser_use_demo.tools import ToolResult
+
+
+def _screenshot_history(count: int):
+    messages = []
+    for index in range(count):
+        tool_id = f"tool_{index}"
+        messages.extend(
+            [
+                {
+                    "role": "assistant",
+                    "content": [
+                        {
+                            "type": "tool_use",
+                            "id": tool_id,
+                            "name": "browser",
+                            "input": {"action": "screenshot"},
+                        }
+                    ],
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": tool_id,
+                            "content": [
+                                {"type": "text", "text": f"screenshot {index}"},
+                                {
+                                    "type": "image",
+                                    "source": {
+                                        "type": "base64",
+                                        "media_type": "image/png",
+                                        "data": f"image-{index}",
+                                    },
+                                },
+                            ],
+                        }
+                    ],
+                },
+            ]
+        )
+    return messages
+
+
+def _nested_images(messages):
+    return [
+        nested
+        for message in messages
+        for block in message.get("content", [])
+        if isinstance(block, dict) and block.get("type") == "tool_result"
+        for nested in block.get("content", [])
+        if isinstance(nested, dict) and nested.get("type") == "image"
+    ]
+
+
+class TestRecentImageFiltering:
+    def test_filters_nested_tool_result_images_without_breaking_tool_pairs(self):
+        messages = _screenshot_history(13)
+
+        _maybe_filter_to_n_most_recent_images(messages, images_to_keep=3)
+
+        assert [image["source"]["data"] for image in _nested_images(messages)] == [
+            "image-10",
+            "image-11",
+            "image-12",
+        ]
+        tool_use_ids = [
+            block["id"]
+            for message in messages
+            if message["role"] == "assistant"
+            for block in message["content"]
+            if block["type"] == "tool_use"
+        ]
+        tool_result_ids = [
+            block["tool_use_id"]
+            for message in messages
+            if message["role"] == "user"
+            for block in message["content"]
+            if block["type"] == "tool_result"
+        ]
+        assert tool_result_ids == tool_use_ids
+        assert all(
+            any(nested.get("type") == "text" for nested in block["content"])
+            for message in messages
+            if message["role"] == "user"
+            for block in message["content"]
+        )
+
+    @pytest.mark.parametrize("screenshot_count", [4, 13])
+    @patch("browser_use_demo.loop.Anthropic")
+    def test_sampling_loop_applies_requested_image_limit(
+        self,
+        mock_anthropic,
+        screenshot_count,
+    ):
+        async def run_test():
+            mock_client = Mock()
+            mock_anthropic.return_value = mock_client
+            captured_messages = []
+
+            def create(**kwargs):
+                captured_messages.append(deepcopy(kwargs["messages"]))
+                return Mock(
+                    content=[Mock(type="text", text="Done")],
+                    stop_reason="end_turn",
+                )
+
+            mock_client.messages.create.side_effect = create
+            messages = _screenshot_history(screenshot_count)
+
+            await sampling_loop(
+                model="kimi-for-coding",
+                provider=APIProvider.KIMI,
+                system_prompt_suffix="",
+                messages=messages,
+                output_callback=lambda _: None,
+                tool_output_callback=lambda *_: None,
+                api_response_callback=lambda *_: None,
+                api_key="test-key",
+                only_n_most_recent_images=3,
+            )
+
+            assert len(_nested_images(captured_messages[0])) == 3
+
+        asyncio.run(run_test())
 
 
 class TestResponseProcessor:
@@ -398,18 +529,25 @@ class TestSamplingLoopIntegration:
             mock_client = Mock()
             mock_anthropic.return_value = mock_client
 
-            mock_response = Mock()
-            mock_response.content = [
-                Mock(type="text", text="I'll help you with that"),
-                Mock(
+            tool_response = Mock()
+            tool_response.content = [
+                TextBlock(type="text", text="I'll help you with that"),
+                ToolUseBlock(
                     type="tool_use",
                     id="tool_001",
                     name="browser",
                     input={"action": "screenshot"}
                 )
             ]
+            tool_response.stop_reason = "tool_use"
+            final_response = Mock(
+                content=[TextBlock(type="text", text="Done")],
+                stop_reason="end_turn",
+            )
 
-            mock_client.beta.messages.create = Mock(return_value=mock_response)
+            mock_client.beta.messages.create = Mock(
+                side_effect=[tool_response, final_response]
+            )
 
             mock_browser = AsyncMock()
             mock_browser.return_value = ToolResult(output="Screenshot taken")
@@ -436,9 +574,6 @@ class TestSamplingLoopIntegration:
                 browser_tool=mock_browser
             )
 
-            api_call_args = mock_client.beta.messages.create.call_args[1]
-            assert api_call_args["tool_choice"] == {"type": "auto"}
-
             assert len(output_messages) >= 2
             assert any(
                 msg.get("type") == "text" and "help you" in msg.get("text", "")
@@ -449,16 +584,23 @@ class TestSamplingLoopIntegration:
             assistant_msgs = [m for m in updated_messages if m["role"] == "assistant"]
             assert len(assistant_msgs) > 0
 
-            last_assistant = assistant_msgs[-1]
-            assert isinstance(last_assistant["content"], list)
+            mixed_assistant = next(
+                message
+                for message in assistant_msgs
+                if any(
+                    block.get("type") == "tool_use"
+                    for block in message["content"]
+                )
+            )
+            assert isinstance(mixed_assistant["content"], list)
 
             has_text = any(
                 block.get("type") == "text"
-                for block in last_assistant["content"]
+                for block in mixed_assistant["content"]
             )
             has_tool = any(
                 block.get("type") == "tool_use"
-                for block in last_assistant["content"]
+                for block in mixed_assistant["content"]
             )
 
             assert has_text and has_tool, "Assistant message should contain both text and tool use"
@@ -510,25 +652,32 @@ class TestSamplingLoopIntegration:
             mock_client = Mock()
             mock_anthropic.return_value = mock_client
 
-            mock_response = Mock()
-            mock_response.content = [
-                Mock(type="text", text="I'll perform multiple actions"),
-                Mock(
+            tool_response = Mock()
+            tool_response.content = [
+                TextBlock(type="text", text="I'll perform multiple actions"),
+                ToolUseBlock(
                     type="tool_use",
                     id="tool_001",
                     name="browser",
                     input={"action": "screenshot"}
                 ),
-                Mock(type="text", text="Now navigating"),
-                Mock(
+                TextBlock(type="text", text="Now navigating"),
+                ToolUseBlock(
                     type="tool_use",
                     id="tool_002",
                     name="browser",
                     input={"action": "navigate", "url": "example.com"}
                 )
             ]
+            tool_response.stop_reason = "tool_use"
+            final_response = Mock(
+                content=[TextBlock(type="text", text="Done")],
+                stop_reason="end_turn",
+            )
 
-            mock_client.beta.messages.create = Mock(return_value=mock_response)
+            mock_client.beta.messages.create = Mock(
+                side_effect=[tool_response, final_response]
+            )
 
             mock_browser = AsyncMock()
             mock_browser.return_value = ToolResult(output="Action completed")
@@ -548,14 +697,21 @@ class TestSamplingLoopIntegration:
             )
 
             assistant_msgs = [m for m in updated_messages if m["role"] == "assistant"]
-            last_assistant = assistant_msgs[-1]
+            mixed_assistant = next(
+                message
+                for message in assistant_msgs
+                if any(
+                    block.get("type") == "tool_use"
+                    for block in message["content"]
+                )
+            )
 
             text_blocks = [
-                block for block in last_assistant["content"]
+                block for block in mixed_assistant["content"]
                 if block.get("type") == "text"
             ]
             tool_blocks = [
-                block for block in last_assistant["content"]
+                block for block in mixed_assistant["content"]
                 if block.get("type") == "tool_use"
             ]
 
@@ -565,8 +721,8 @@ class TestSamplingLoopIntegration:
         asyncio.run(run_test())
 
     @patch("browser_use_demo.loop.Anthropic")
-    def test_tool_choice_parameter_set(self, mock_anthropic):
-        """Test that tool_choice is explicitly set to auto."""
+    def test_tools_use_default_auto_tool_choice(self, mock_anthropic):
+        """Providing tools without tool_choice uses the API's default auto mode."""
 
         async def run_test():
             mock_client = Mock()
@@ -589,7 +745,7 @@ class TestSamplingLoopIntegration:
             )
 
             call_args = mock_client.beta.messages.create.call_args[1]
-            assert "tool_choice" in call_args
-            assert call_args["tool_choice"] == {"type": "auto"}
+            assert call_args["tools"]
+            assert "tool_choice" not in call_args
 
         asyncio.run(run_test())

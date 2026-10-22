@@ -98,7 +98,9 @@ class TestStateInitializationAndPersistence:
         expected_keys = {
             "messages",
             "api_key",
+            "base_url",
             "provider",
+            "credential_provider",
             "model",
             "max_tokens",
             "system_prompt",
@@ -107,7 +109,8 @@ class TestStateInitializationAndPersistence:
             "browser_tool",
             "event_loop",
             "rendered_message_count",
-            "is_agent_running",
+            "chat_disabled",
+            "last_error",
             "active_messages",
             "active_response_container",
         }

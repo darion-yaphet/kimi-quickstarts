@@ -98,6 +98,13 @@ async def sampling_loop(
     )
 
     while True:
+        if only_n_most_recent_images is not None:
+            _maybe_filter_to_n_most_recent_images(
+                messages,
+                only_n_most_recent_images,
+                min_removal_threshold=1,
+            )
+
         # Configure client and betas
         betas = []
         enable_prompt_caching = False
@@ -196,26 +203,56 @@ def _maybe_filter_to_n_most_recent_images(
     if images_to_keep <= 0:
         raise ValueError("images_to_keep must be > 0")
 
+    def count_images(content: object) -> int:
+        if not isinstance(content, list):
+            return 0
+
+        count = 0
+        for block in content:
+            if not isinstance(block, dict):
+                continue
+            if block.get("type") == "image":
+                count += 1
+            count += count_images(block.get("content"))
+        return count
+
     total_images = sum(
-        1
+        count_images(message.get("content"))
         for message in messages
         if message["role"] == "user"
-        for block in message.get("content", [])
-        if isinstance(block, dict) and block.get("type") == "image"
     )
 
     images_to_remove = total_images - images_to_keep
     if images_to_remove < min_removal_threshold:
         return
 
-    images_removed = 0
+    def remove_oldest_images(content: object, remaining: int) -> int:
+        if not isinstance(content, list):
+            return remaining
+
+        filtered_content = []
+        for block in content:
+            if (
+                remaining > 0
+                and isinstance(block, dict)
+                and block.get("type") == "image"
+            ):
+                remaining -= 1
+                continue
+
+            if remaining > 0 and isinstance(block, dict):
+                remaining = remove_oldest_images(block.get("content"), remaining)
+            filtered_content.append(block)
+
+        content[:] = filtered_content
+        return remaining
+
+    images_remaining_to_remove = images_to_remove
     for message in messages:
-        if message["role"] == "user" and isinstance(message.get("content"), list):
-            new_content = []
-            for block in message["content"]:
-                if isinstance(block, dict) and block.get("type") == "image":
-                    if images_removed < images_to_remove:
-                        images_removed += 1
-                        continue
-                new_content.append(block)
-            message["content"] = new_content
+        if message["role"] == "user":
+            images_remaining_to_remove = remove_oldest_images(
+                message.get("content"),
+                images_remaining_to_remove,
+            )
+            if images_remaining_to_remove == 0:
+                break
