@@ -10,6 +10,7 @@
     "build": "NEXT_PUBLIC_INCLUDE_LEFT_SIDEBAR=true NEXT_PUBLIC_INCLUDE_RIGHT_SIDEBAR=true next build",
     "start": "next start",
     "lint": "next lint",
+    "test": "node --test tests/*.test.cjs",
     "dev:full": "npm run dev",
     "dev:left": "NEXT_PUBLIC_INCLUDE_LEFT_SIDEBAR=true NEXT_PUBLIC_INCLUDE_RIGHT_SIDEBAR=false next dev",
     "dev:right": "NEXT_PUBLIC_INCLUDE_LEFT_SIDEBAR=false NEXT_PUBLIC_INCLUDE_RIGHT_SIDEBAR=true next dev",

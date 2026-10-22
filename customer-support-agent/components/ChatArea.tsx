@@ -24,6 +24,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  acquireSubmissionLock,
+  buildApiHistory,
+  parseChatResponse,
+  releaseSubmissionLock,
+  replaceMessageById,
+  toErrorAssistantMessage,
+  type ChatMessage,
+} from "@/app/lib/chat-state";
 
 const TypedText = ({ text = "", delay = 5 }) => {
   const [displayedText, setDisplayedText] = useState("");
@@ -195,12 +204,6 @@ type Model = {
   name: string;
 };
 
-interface Message {
-  id: string;
-  role: string;
-  content: string;
-}
-
 // Define the props interface for ConversationHeader
 interface ConversationHeaderProps {
   selectedModel: string;
@@ -297,7 +300,7 @@ const ConversationHeader: React.FC<ConversationHeaderProps> = ({
 );
 
 function ChatArea() {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showHeader, setShowHeader] = useState(false);
@@ -305,6 +308,7 @@ function ChatArea() {
   const [showAvatar, setShowAvatar] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const isSubmittingRef = useRef(false);
   const [selectedKnowledgeBase, setSelectedKnowledgeBase] = useState(
     "local",
   );
@@ -402,6 +406,14 @@ function ChatArea() {
     if (typeof event !== "string") {
       event.preventDefault();
     }
+    if (!acquireSubmissionLock(isSubmittingRef)) return;
+
+    const submittedContent = typeof event === "string" ? event : input;
+    if (!submittedContent.trim()) {
+      releaseSubmissionLock(isSubmittingRef);
+      return;
+    }
+
     if (!showHeader) setShowHeader(true);
     if (!showAvatar) setShowAvatar(true);
     setIsLoading(true);
@@ -409,15 +421,17 @@ function ChatArea() {
     const clientStart = performance.now();
     console.log("🔄 Starting request: " + new Date().toISOString());
 
-    const userMessage = {
+    const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
       role: "user",
-      content: typeof event === "string" ? event : input,
+      content: submittedContent,
+      delivery: "complete",
     };
 
-    const placeholderMessage = {
+    const placeholderMessage: ChatMessage = {
       id: crypto.randomUUID(),
       role: "assistant",
+      delivery: "pending",
       content: JSON.stringify({
         response: "",
         thinking: "AI is processing...",
@@ -445,7 +459,7 @@ function ChatArea() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          messages: [...messages, userMessage],
+          messages: buildApiHistory(messages, userMessage),
           model: selectedModel,
           knowledgeBaseId: selectedKnowledgeBase,
         }),
@@ -457,11 +471,7 @@ function ChatArea() {
 
       decodeDebugData(response);
 
-      if (!response.ok) {
-        throw new Error(`API request failed with status ${response.status}`);
-      }
-
-      const data = await response.json();
+      const data = await parseChatResponse(response);
       const endTime = performance.now();
       logDuration("JSON Parse Duration", endTime - responseReceived);
       logDuration("Total API Duration", endTime - startTime);
@@ -496,14 +506,12 @@ function ChatArea() {
       logDuration("Response Processing", readyToRender - responseReceived);
 
       setMessages((prevMessages) => {
-        const newMessages = [...prevMessages];
-        const lastIndex = newMessages.length - 1;
-        newMessages[lastIndex] = {
-          id: crypto.randomUUID(),
+        return replaceMessageById(prevMessages, placeholderMessage.id, {
+          id: placeholderMessage.id,
           role: "assistant",
           content: JSON.stringify(data),
-        };
-        return newMessages;
+          delivery: "complete",
+        });
       });
 
       const sidebarEvent = new CustomEvent("updateSidebar", {
@@ -527,7 +535,15 @@ function ChatArea() {
     } catch (error) {
       console.error("Error fetching chat response:", error);
       console.error("Failed to process message:", userMessage.content);
+      setMessages((prevMessages) =>
+        replaceMessageById(
+          prevMessages,
+          placeholderMessage.id,
+          toErrorAssistantMessage(placeholderMessage.id, error),
+        ),
+      );
     } finally {
+      releaseSubmissionLock(isSubmittingRef);
       setIsLoading(false);
       const clientEnd = performance.now();
       logDuration("Total Client Operation", clientEnd - clientStart);
@@ -537,7 +553,7 @@ function ChatArea() {
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      if (input.trim() !== "") {
+      if (!isLoading && input.trim() !== "") {
         handleSubmit(e as any);
       }
     }
