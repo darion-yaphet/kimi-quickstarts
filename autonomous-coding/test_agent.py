@@ -1,6 +1,7 @@
 """Regression tests for the autonomous agent lifecycle."""
 
 import asyncio
+import importlib
 import json
 import sys
 import types
@@ -23,8 +24,8 @@ sdk_types_stub = types.ModuleType("claude_code_sdk.types")
 sdk_types_stub.HookMatcher = _SdkPlaceholder
 sys.modules.setdefault("claude_code_sdk.types", sdk_types_stub)
 
-import agent
-import autonomous_agent_demo
+agent = importlib.import_module("agent")
+autonomous_agent_demo = importlib.import_module("autonomous_agent_demo")
 
 
 class StubClient:
