@@ -307,12 +307,11 @@ function ChatArea() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [selectedKnowledgeBase, setSelectedKnowledgeBase] = useState(
-    "your-knowledge-base-id",
+    "local",
   );
 
   const knowledgeBases: KnowledgeBase[] = [
-    { id: "your-knowledge-base-id", name: "Your KB Name" },
-    // Add more knowledge bases as needed
+    { id: "local", name: "Local knowledge base" },
   ];
 
   const models: Model[] = [
@@ -476,14 +475,13 @@ function ChatArea() {
         data.suggested_questions = JSON.parse(suggestedQuestionsHeader);
       }
 
-      const ragHeader = response.headers.get("x-rag-sources");
-      if (ragHeader) {
+      if (data.ragSources?.length) {
         const ragProcessed = performance.now();
         logDuration(
           "🔍 RAG Processing Duration",
           ragProcessed - responseReceived,
         );
-        const sources = JSON.parse(ragHeader);
+        const sources = data.ragSources;
         window.dispatchEvent(
           new CustomEvent("updateRagSources", {
             detail: {

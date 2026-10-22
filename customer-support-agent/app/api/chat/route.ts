@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
-import { retrieveContext, RAGSource } from "@/app/lib/utils";
+import { retrieveContext } from "@/app/lib/local-knowledge";
+import type { RAGSource } from "@/app/lib/utils";
 import crypto from "crypto";
 import customerSupportCategories from "@/app/lib/customer_support_categories.json";
 
@@ -87,9 +88,8 @@ export async function POST(req: Request) {
   let isRagWorking = false;
   let ragSources: RAGSource[] = [];
 
-  // RAG is optional so the chat demo can run without AWS credentials.
-  if (process.env.ENABLE_RAG === "true") {
-    try {
+  // Retrieve supporting material from Markdown and text files in /knowledge.
+  try {
     console.log("🔍 Initiating RAG retrieval for query:", latestMessage);
     measureTime("RAG Start");
     const result = await retrieveContext(latestMessage, knowledgeBaseId);
@@ -107,15 +107,12 @@ export async function POST(req: Request) {
       "✅ RAG retrieval completed successfully. Context:",
       retrievedContext.slice(0, 100) + "...",
     );
-    } catch (error) {
-      console.error("💀 RAG Error:", error);
-      console.error("❌ RAG retrieval failed for query:", latestMessage);
-      retrievedContext = "";
-      isRagWorking = false;
-      ragSources = [];
-    }
-  } else {
-    console.log("ℹ️ RAG retrieval disabled (set ENABLE_RAG=true to enable it).");
+  } catch (error) {
+    console.error("💀 RAG Error:", error);
+    console.error("❌ RAG retrieval failed for query:", latestMessage);
+    retrievedContext = "";
+    isRagWorking = false;
+    ragSources = [];
   }
 
   measureTime("RAG Total Duration");
@@ -251,6 +248,7 @@ export async function POST(req: Request) {
     const responseWithId = {
       id: crypto.randomUUID(),
       ...validatedResponse,
+      ragSources,
     };
 
     // Check if redirection to a human agent is needed
@@ -266,14 +264,6 @@ export async function POST(req: Request) {
         "Content-Type": "application/json",
       },
     });
-
-    // Add RAG sources to the response headers if available
-    if (ragSources.length > 0) {
-      apiResponse.headers.set(
-        "x-rag-sources",
-        sanitizeHeaderValue(JSON.stringify(ragSources)),
-      );
-    }
 
     // Add debug data to the response headers
     apiResponse.headers.set("X-Debug-Data", sanitizeHeaderValue(debugData));

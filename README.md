@@ -45,7 +45,7 @@ and configure the appropriate service and credentials.
 
 | Directory | Purpose |
 | --- | --- |
-| [customer-support-agent](customer-support-agent/) | Customer support chat; optional AWS knowledge retrieval |
+| [customer-support-agent](customer-support-agent/) | Customer support chat with local knowledge retrieval |
 | [financial-data-analyst](financial-data-analyst/) | Financial analysis and custom chart tools |
 | [agents](agents/) | Small reusable agent and MCP tool loop |
 | [autonomous-coding](autonomous-coding/) | Long-running coding sessions |

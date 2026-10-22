@@ -39,7 +39,7 @@ Kimi Code 密钥用于编程用途。对于产品或企业部署，请参阅
 
 | 目录 | 用途 |
 | --- | --- |
-| [customer-support-agent](customer-support-agent/) | 客户支持聊天；可选 AWS 知识检索 |
+| [customer-support-agent](customer-support-agent/) | 客户支持聊天；支持本地知识检索 |
 | [financial-data-analyst](financial-data-analyst/) | 财务分析和自定义图表工具 |
 | [agents](agents/) | 小型可复用智能体及 MCP 工具调用循环 |
 | [autonomous-coding](autonomous-coding/) | 长时间运行的编程会话 |
