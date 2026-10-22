@@ -8,6 +8,7 @@ const ts = require("typescript");
 function loadRoute(modelResponse) {
   class MockAnthropic {
     static APIError = class APIError extends Error {};
+    static AuthenticationError = class AuthenticationError extends Error {};
 
     messages = {
       create: async () => modelResponse,
@@ -49,39 +50,121 @@ function loadRoute(modelResponse) {
   return routeModule.exports;
 }
 
-test("pie chart conversion preserves a zero-valued metric", async () => {
+async function postChart(chartInput) {
   const { POST } = loadRoute({
     stop_reason: "tool_use",
     content: [
       {
         type: "tool_use",
         name: "generate_graph_data",
-        input: {
-          chartType: "pie",
-          config: {
-            title: "Revenue mix",
-            description: "Revenue by product",
-            xAxisKey: "category",
-          },
-          data: [{ category: "Free tier", revenue: 0, value: 99 }],
-          chartConfig: {
-            revenue: { label: "Revenue" },
-          },
-        },
+        input: chartInput,
       },
     ],
   });
 
   const response = await POST({
     json: async () => ({
-      messages: [{ role: "user", content: "Show revenue by product" }],
+      messages: [{ role: "user", content: "Show the data" }],
       model: "kimi-for-coding",
     }),
   });
-  const body = await response.json();
+
+  return { response, body: await response.json() };
+}
+
+function validChart(chartType) {
+  const chartConfig =
+    chartType === "multiBar" || chartType === "stackedArea"
+      ? {
+          revenue: { label: "Revenue" },
+          costs: { label: "Costs", stacked: chartType === "stackedArea" },
+        }
+      : { revenue: { label: "Revenue" } };
+
+  return {
+    chartType,
+    config: {
+      title: "Financial performance",
+      description: "Performance by period",
+      xAxisKey: chartType === "pie" ? "category" : "period",
+      trend: { percentage: 10, direction: "up" },
+    },
+    data:
+      chartType === "pie"
+        ? [{ category: "Subscriptions", revenue: 125 }]
+        : [{ period: "Q1 2025", revenue: 125, costs: 75 }],
+    chartConfig,
+  };
+}
+
+test("pie chart conversion preserves zero and supports an omitted xAxisKey", async () => {
+  const { response, body } = await postChart({
+    chartType: "pie",
+    config: {
+      title: "Revenue mix",
+      description: "Revenue by product",
+    },
+    data: [{ category: "Free tier", revenue: 0, value: 99 }],
+    chartConfig: {
+      revenue: { label: "Revenue" },
+    },
+  });
 
   assert.equal(response.status, 200);
   assert.deepEqual(body.chartData.data, [
     { segment: "Free tier", value: 0 },
   ]);
+});
+
+test("chart validation reports a missing config object clearly", async () => {
+  const chart = validChart("bar");
+  delete chart.config;
+
+  const { response, body } = await postChart(chart);
+
+  assert.equal(response.status, 422);
+  assert.equal(body.error, "Invalid chart data");
+  assert.match(body.details, /config/i);
+});
+
+test("chart validation rejects non-finite numeric series values", async () => {
+  const chart = validChart("line");
+  chart.data[0].revenue = Number.POSITIVE_INFINITY;
+
+  const { response, body } = await postChart(chart);
+
+  assert.equal(response.status, 422);
+  assert.equal(body.error, "Invalid chart data");
+  assert.match(body.details, /finite number/i);
+});
+
+test("non-pie charts require string x-axis labels", async () => {
+  const chart = validChart("bar");
+  chart.data[0].period = 2025;
+
+  const { response, body } = await postChart(chart);
+
+  assert.equal(response.status, 422);
+  assert.equal(body.error, "Invalid chart data");
+  assert.match(body.details, /period must be a non-empty string/i);
+});
+
+test("chart validation accepts all supported chart types", async (t) => {
+  for (const chartType of [
+    "bar",
+    "multiBar",
+    "line",
+    "pie",
+    "area",
+    "stackedArea",
+  ]) {
+    await t.test(chartType, async () => {
+      const { response, body } = await postChart(validChart(chartType));
+
+      assert.equal(response.status, 200);
+      assert.equal(body.chartData.chartType, chartType);
+      assert.equal(body.chartData.config.title, "Financial performance");
+      assert.equal(body.chartData.data.length, 1);
+    });
+  }
 });

@@ -26,6 +26,163 @@ interface ChartToolResponse extends ChartData {
   // Any additional properties specific to the tool response
 }
 
+const supportedChartTypes = new Set<ChartData["chartType"]>([
+  "bar",
+  "multiBar",
+  "line",
+  "pie",
+  "area",
+  "stackedArea",
+]);
+
+class ChartValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ChartValidationError";
+  }
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const requireRecord = (
+  value: unknown,
+  path: string,
+): Record<string, unknown> => {
+  if (!isRecord(value)) {
+    throw new ChartValidationError(`${path} must be an object`);
+  }
+  return value;
+};
+
+const requireNonEmptyString = (value: unknown, path: string): string => {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new ChartValidationError(`${path} must be a non-empty string`);
+  }
+  return value;
+};
+
+const requireFiniteNumber = (value: unknown, path: string): number => {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new ChartValidationError(`${path} must be a finite number`);
+  }
+  return value;
+};
+
+const getPieSegment = (
+  row: Record<string, unknown>,
+  xAxisKey?: string,
+): unknown =>
+  row[xAxisKey || "segment"] || row.segment || row.category || row.name;
+
+const validateChartData = (input: unknown): ChartToolResponse => {
+  const chartData = requireRecord(input, "chartData");
+
+  if (!supportedChartTypes.has(chartData.chartType as ChartData["chartType"])) {
+    throw new ChartValidationError("chartData.chartType is not supported");
+  }
+
+  const config = requireRecord(chartData.config, "chartData.config");
+  requireNonEmptyString(config.title, "chartData.config.title");
+  requireNonEmptyString(
+    config.description,
+    "chartData.config.description",
+  );
+  const xAxisKey =
+    chartData.chartType === "pie" && config.xAxisKey === undefined
+      ? undefined
+      : requireNonEmptyString(
+          config.xAxisKey,
+          "chartData.config.xAxisKey",
+        );
+
+  for (const key of ["footer", "totalLabel"] as const) {
+    if (config[key] !== undefined && typeof config[key] !== "string") {
+      throw new ChartValidationError(
+        `chartData.config.${key} must be a string`,
+      );
+    }
+  }
+
+  if (config.trend !== undefined) {
+    const trend = requireRecord(config.trend, "chartData.config.trend");
+    requireFiniteNumber(
+      trend.percentage,
+      "chartData.config.trend.percentage",
+    );
+    if (trend.direction !== "up" && trend.direction !== "down") {
+      throw new ChartValidationError(
+        'chartData.config.trend.direction must be "up" or "down"',
+      );
+    }
+  }
+
+  const chartConfig = requireRecord(
+    chartData.chartConfig,
+    "chartData.chartConfig",
+  );
+  const seriesKeys = Object.keys(chartConfig);
+  if (seriesKeys.length === 0) {
+    throw new ChartValidationError(
+      "chartData.chartConfig must define at least one series",
+    );
+  }
+
+  for (const seriesKey of seriesKeys) {
+    requireNonEmptyString(seriesKey, "chartData.chartConfig series key");
+    const series = requireRecord(
+      chartConfig[seriesKey],
+      `chartData.chartConfig.${seriesKey}`,
+    );
+    requireNonEmptyString(
+      series.label,
+      `chartData.chartConfig.${seriesKey}.label`,
+    );
+    if (series.stacked !== undefined && typeof series.stacked !== "boolean") {
+      throw new ChartValidationError(
+        `chartData.chartConfig.${seriesKey}.stacked must be a boolean`,
+      );
+    }
+  }
+
+  if (!Array.isArray(chartData.data) || chartData.data.length === 0) {
+    throw new ChartValidationError(
+      "chartData.data must be a non-empty array",
+    );
+  }
+
+  chartData.data.forEach((rowValue, rowIndex) => {
+    const row = requireRecord(rowValue, `chartData.data[${rowIndex}]`);
+
+    if (chartData.chartType === "pie") {
+      requireNonEmptyString(
+        getPieSegment(row, xAxisKey),
+        `chartData.data[${rowIndex}] pie segment`,
+      );
+      const valueKey = seriesKeys[0];
+      requireFiniteNumber(
+        row[valueKey] ?? row.value,
+        `chartData.data[${rowIndex}].${valueKey}`,
+      );
+      return;
+    }
+
+    requireNonEmptyString(
+      row[xAxisKey!],
+      `chartData.data[${rowIndex}].${xAxisKey}`,
+    );
+
+    for (const seriesKey of seriesKeys) {
+      requireFiniteNumber(
+        row[seriesKey],
+        `chartData.data[${rowIndex}].${seriesKey}`,
+      );
+    }
+  });
+
+  return chartData as unknown as ChartToolResponse;
+};
+
 interface ToolSchema {
   name: string;
   description: string;
@@ -58,6 +215,8 @@ const tools: ToolSchema[] = [
         },
         config: {
           type: "object" as const,
+          description:
+            "Chart presentation settings. xAxisKey is required for every non-pie chart and its row values must be strings; pie charts may omit it and use segment, category, or name labels.",
           properties: {
             title: { type: "string" as const },
             description: { type: "string" as const },
@@ -74,12 +233,18 @@ const tools: ToolSchema[] = [
             },
             footer: { type: "string" as const },
             totalLabel: { type: "string" as const },
-            xAxisKey: { type: "string" as const },
+            xAxisKey: {
+              type: "string" as const,
+              description:
+                "Required for non-pie charts; identifies a string label in every data row. Optional for pie charts.",
+            },
           },
           required: ["title", "description"],
         },
         data: {
           type: "array" as const,
+          description:
+            "Chart rows. Every configured series value must be a finite number. Non-pie x-axis values must be strings.",
           items: {
             type: "object" as const,
             additionalProperties: true, // Allow any structure
@@ -353,15 +518,7 @@ Focus on clear financial insights and let the visualization enhance understandin
     const processToolResponse = (toolUseContent: any) => {
       if (!toolUseContent) return null;
 
-      const chartData = toolUseContent.input as ChartToolResponse;
-
-      if (
-        !chartData.chartType ||
-        !chartData.data ||
-        !Array.isArray(chartData.data)
-      ) {
-        throw new Error("Invalid chart data structure");
-      }
+      const chartData = validateChartData(toolUseContent.input);
 
       // Transform data for pie charts to match expected structure
       if (chartData.chartType === "pie") {
@@ -372,8 +529,7 @@ Focus on clear financial insights and let the visualization enhance understandin
           const segmentKey = chartData.config.xAxisKey || "segment";
 
           return {
-            segment:
-              item[segmentKey] || item.segment || item.category || item.name,
+            segment: getPieSegment(item, segmentKey),
             value: item[valueKey] ?? item.value,
           };
         });
@@ -428,6 +584,19 @@ Focus on clear financial insights and let the visualization enhance understandin
       headers: error instanceof Error ? (error as any).headers : undefined,
       response: error instanceof Error ? (error as any).response : undefined,
     });
+
+    if (error instanceof ChartValidationError) {
+      return new Response(
+        JSON.stringify({
+          error: "Invalid chart data",
+          details: error.message,
+        }),
+        {
+          status: 422,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
 
     // Add specific error handling for different scenarios
     if (error instanceof Anthropic.APIError) {
