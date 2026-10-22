@@ -14,6 +14,11 @@ from pathlib import Path
 from typing import Any, Literal, Optional, TypedDict, cast
 from uuid import uuid4
 
+from anthropic import (
+    AsyncAnthropic,
+    AsyncAnthropicBedrock,
+    AsyncAnthropicVertex,
+)
 from anthropic.types.beta import BetaToolUnionParam
 from playwright.async_api import Browser, BrowserContext, Page
 
@@ -191,6 +196,42 @@ class BrowserTool(BaseAnthropicTool):
         self._initialized = False
         self._event_loop = None  # Track which event loop we're initialized in
         self.cdp_url = None  # Initialize CDP URL attribute for cleanup method
+        self._find_client = None
+        self._find_model: str | None = None
+        self._find_provider: str | None = None
+        self._find_config: tuple[str, str, str, str] | None = None
+
+    def configure_find(
+        self,
+        *,
+        provider: object,
+        api_key: str,
+        base_url: str | None,
+        model: str,
+    ) -> None:
+        """Use the active chat configuration for AI-assisted element search."""
+        provider_name = getattr(provider, "value", str(provider))
+        config = (provider_name, api_key, base_url or "", model)
+        if config == self._find_config:
+            return
+
+        if provider_name == "kimi":
+            self._find_client = AsyncAnthropic(
+                api_key=api_key,
+                base_url=base_url or "https://api.kimi.com/coding/",
+            )
+        elif provider_name == "anthropic":
+            self._find_client = AsyncAnthropic(api_key=api_key)
+        elif provider_name == "bedrock":
+            self._find_client = AsyncAnthropicBedrock()
+        elif provider_name == "vertex":
+            self._find_client = AsyncAnthropicVertex()
+        else:
+            raise ValueError(f"Unsupported provider for element search: {provider_name}")
+
+        self._find_provider = provider_name
+        self._find_model = model
+        self._find_config = config
 
     @property
     def options(self) -> BrowserOptions:
@@ -914,20 +955,35 @@ Source element: <{result.get("source", "unknown")}>
             else:
                 dom_tree_json = json.dumps(dom_tree, indent=2)
 
-            # Use the configured Anthropic-compatible Messages API if available.
-            api_key = os.environ.get("KIMI_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")
-            if api_key:
-                try:
-                    from anthropic import AsyncAnthropic
-
-                    client = AsyncAnthropic(
-                        api_key=api_key,
-                        base_url=os.environ.get(
-                            "ANTHROPIC_BASE_URL", "https://api.kimi.com/coding/"
+            if self._find_client is None or self._find_model is None:
+                matching_lines = [
+                    line.strip()
+                    for line in dom_tree_json.splitlines()
+                    if search_query.casefold() in line.casefold() and "[ref=" in line
+                ][:20]
+                fallback_reason = (
+                    "AI element search is not configured; used local accessibility-tree "
+                    "text matching."
+                )
+                if not matching_lines:
+                    return ToolResult(
+                        output=(
+                            f"{fallback_reason}\n"
+                            f"No matching elements found for: {search_query}"
                         ),
+                        error=None,
                     )
+                return ToolResult(
+                    output=(
+                        f"{fallback_reason}\n"
+                        f"Found {len(matching_lines)} matching element"
+                        f"{'s' if len(matching_lines) != 1 else ''}:\n\n"
+                        + "\n".join(f"- {line}" for line in matching_lines)
+                    ),
+                    error=None,
+                )
 
-                    prompt = f"""You are helping find elements on a web page. The user wants to find: "{search_query}"
+            prompt = f"""You are helping find elements on a web page. The user wants to find: "{search_query}"
 
 Here is the accessibility tree of the page:
 {dom_tree_json}
@@ -950,106 +1006,100 @@ If no matching elements are found, return only:
 FOUND: 0
 ERROR: explanation of why no elements were found"""
 
-                    response = await client.messages.create(
-                        model=os.environ.get("KIMI_MODEL", "kimi-for-coding"),
-                        max_tokens=4096,
-                        messages=[{"role": "user", "content": prompt}],
+            try:
+                response = await self._find_client.messages.create(
+                    model=self._find_model,
+                    max_tokens=4096,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+            except Exception as e:
+                provider = self._find_provider or "configured"
+                raise ToolError(
+                    f"{provider} element search request failed: {e}"
+                ) from e
+
+            if response.stop_reason == "max_tokens":
+                raise ToolError(
+                    "Element search response reached max_tokens before completion"
+                )
+            if not response.content:
+                raise ToolError("Element search returned an empty response")
+
+            first_content = response.content[0]
+            response_text = getattr(first_content, "text", None)
+            if not isinstance(response_text, str) or not response_text.strip():
+                raise ToolError("Element search returned a non-text response")
+
+            lines = [line.strip() for line in response_text.split("\n") if line.strip()]
+            total_found = None
+            elements = []
+            has_more = False
+            error_message = None
+
+            for line in lines:
+                if line.startswith("FOUND:"):
+                    try:
+                        total_found = int(line.split(":", 1)[1].strip())
+                    except (ValueError, IndexError) as e:
+                        raise ToolError(
+                            f"Could not parse element search count: {line}"
+                        ) from e
+                elif line.startswith("SHOWING:"):
+                    continue
+                elif line.startswith("ERROR:"):
+                    error_message = line[6:].strip()
+                elif line.startswith("MORE:"):
+                    has_more = True
+                elif line.startswith("ref_") and "|" in line:
+                    parts = [part.strip() for part in line.split("|")]
+                    if len(parts) < 4:
+                        raise ToolError(
+                            f"Could not parse element search result: {line}"
+                        )
+                    elements.append(
+                        {
+                            "ref": parts[0],
+                            "role": parts[1],
+                            "name": parts[2],
+                            "type": parts[3],
+                            "description": parts[4] if len(parts) > 4 else "",
+                        }
                     )
 
-                    if response.stop_reason == "max_tokens":
-                        raise RuntimeError(
-                            "element search response reached max_tokens before completion"
-                        )
-
-                    # Handle the response properly
-                    first_content = response.content[0]
-                    if hasattr(first_content, "text"):
-                        response_text = first_content.text.strip()
-                    else:
-                        # Handle other content types if needed
-                        response_text = str(first_content)
-                    lines = [
-                        line.strip()
-                        for line in response_text.split("\n")
-                        if line.strip()
-                    ]
-
-                    total_found = 0
-                    elements = []
-                    has_more = False
-                    error_message = None
-
-                    for line in lines:
-                        if line.startswith("FOUND:"):
-                            try:
-                                total_found = int(line.split(":")[1].strip())
-                            except (ValueError, IndexError):
-                                total_found = 0
-                        elif line.startswith("SHOWING:"):
-                            pass
-                        elif line.startswith("ERROR:"):
-                            error_message = line[6:].strip()
-                        elif line.startswith("MORE:"):
-                            has_more = True
-                        elif line.startswith("ref_") and "|" in line:
-                            parts = [p.strip() for p in line.split("|")]
-                            if len(parts) >= 4:
-                                elements.append(
-                                    {
-                                        "ref": parts[0],
-                                        "role": parts[1],
-                                        "name": parts[2] if len(parts) > 2 else "",
-                                        "type": parts[3] if len(parts) > 3 else "",
-                                        "description": parts[4]
-                                        if len(parts) > 4
-                                        else "",
-                                    }
-                                )
-
-                    if total_found == 0 or len(elements) == 0:
-                        return ToolResult(
-                            output=error_message or "No matching elements found",
-                            error=None,
-                        )
-
-                    message = f"Found {total_found} matching element{'s' if total_found != 1 else ''}"
-                    if has_more:
-                        message += f" (showing first {len(elements)}, use a more specific query to narrow results)"
-
-                    # Format elements for output
-                    elements_output = []
-                    for el in elements:
-                        element_str = f"- {el['ref']}: {el['role']}"
-                        if el.get("name"):
-                            element_str += f" {el['name']}"
-                        if el.get("type"):
-                            element_str += f" {el['type']}"
-                        if el.get("description"):
-                            element_str += f" - {el['description']}"
-                        elements_output.append(element_str)
-
-                    elements_str = "\n".join(elements_output)
-                    return ToolResult(output=f"{message}\n\n{elements_str}", error=None)
-
-                except Exception:
-                    pass  # Failed to use AI for find, falling back to simple search
-
-            # Fallback to simple text search if AI is not available
-            elements = await self._page.query_selector_all(
-                f"*:has-text('{search_query}')"
-            )
-
-            if not elements:
+            if total_found is None:
+                raise ToolError("Element search response did not include FOUND count")
+            if total_found == 0:
                 return ToolResult(
-                    output=f"No matching elements found for: {search_query}", error=None
+                    output=error_message or "No matching elements found",
+                    error=None,
+                )
+            if not elements:
+                raise ToolError(
+                    "Element search reported matches without usable element references"
                 )
 
-            # For simple fallback, just report count (no ref_ids without AI analysis)
+            message = f"Found {total_found} matching element{'s' if total_found != 1 else ''}"
+            if has_more:
+                message += f" (showing first {len(elements)}, use a more specific query to narrow results)"
+
+            elements_output = []
+            for element in elements:
+                element_str = f"- {element['ref']}: {element['role']}"
+                if element["name"]:
+                    element_str += f" {element['name']}"
+                if element["type"]:
+                    element_str += f" {element['type']}"
+                if element["description"]:
+                    element_str += f" - {element['description']}"
+                elements_output.append(element_str)
+
             return ToolResult(
-                output=f"Found {len(elements)} matching element{'s' if len(elements) != 1 else ''} (Note: AI-based search with ref_ids requires KIMI_API_KEY)",
+                output=f"{message}\n\n" + "\n".join(elements_output),
                 error=None,
             )
 
+        except ToolError:
+            raise
         except Exception as e:
             raise ToolError(f"Failed to find elements: {str(e)}") from e
 

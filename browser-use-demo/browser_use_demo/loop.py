@@ -89,6 +89,14 @@ async def sampling_loop(
         # Create browser tool with standard dimensions
         browser_tool = BrowserTool()
 
+    if isinstance(browser_tool, BrowserTool):
+        browser_tool.configure_find(
+            provider=provider,
+            api_key=api_key,
+            base_url=base_url,
+            model=model,
+        )
+
     tool_collection = ToolCollection(browser_tool)
 
     # Build system prompt
