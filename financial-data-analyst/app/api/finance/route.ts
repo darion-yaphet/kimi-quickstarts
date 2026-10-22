@@ -374,7 +374,7 @@ Focus on clear financial insights and let the visualization enhance understandin
           return {
             segment:
               item[segmentKey] || item.segment || item.category || item.name,
-            value: item[valueKey] || item.value,
+            value: item[valueKey] ?? item.value,
           };
         });
 
