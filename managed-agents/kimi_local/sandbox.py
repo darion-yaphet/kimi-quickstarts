@@ -873,21 +873,38 @@ class SandboxExecutor:
             )
         except (OSError, subprocess.TimeoutExpired) as exc:
             return {"ok": False, "code": "container_remove_failed", "message": str(exc)}
-        if removal.returncode != 0:
-            message = removal.stderr.strip() or "docker rm -f failed"
-            return {"ok": False, "code": "container_remove_failed", "message": message}
-        verified = self._inspect_container(container_name)
-        if verified["state"] == "absent":
-            return {
-                "ok": True,
-                "code": "removed",
-                "message": "container removal confirmed",
-            }
-        return {
-            "ok": False,
-            "code": "container_removal_unconfirmed",
-            "message": verified.get("message", "container still exists after removal"),
-        }
+        removal_message = removal.stderr.strip() or "docker rm -f failed"
+        confirmation_deadline = time.monotonic() + 2
+        while True:
+            verified = self._inspect_container(container_name)
+            if verified["state"] == "absent":
+                return {
+                    "ok": True,
+                    "code": "removed",
+                    "message": "container removal confirmed",
+                }
+            if verified["state"] != "present":
+                return {
+                    "ok": False,
+                    "code": "container_removal_unconfirmed",
+                    "message": verified.get(
+                        "message", "container absence could not be verified"
+                    ),
+                }
+            if time.monotonic() >= confirmation_deadline:
+                code = (
+                    "container_remove_failed"
+                    if removal.returncode != 0
+                    else "container_removal_unconfirmed"
+                )
+                return {"ok": False, "code": code, "message": removal_message}
+            time.sleep(0.05)
+
+    @staticmethod
+    def _close_process_pipes(process: subprocess.Popen[bytes]) -> None:
+        for stream in (process.stdin, process.stdout, process.stderr):
+            if stream is not None and not stream.closed:
+                stream.close()
 
     @staticmethod
     def _terminate_process(process: subprocess.Popen[bytes]) -> None:
@@ -897,9 +914,7 @@ class SandboxExecutor:
             process.wait(timeout=2)
         except subprocess.TimeoutExpired:
             pass
-        for stream in (process.stdin, process.stdout, process.stderr):
-            if stream is not None and not stream.closed:
-                stream.close()
+        SandboxExecutor._close_process_pipes(process)
 
     def _collect(
         self,
@@ -1139,3 +1154,6 @@ class SandboxExecutor:
                     else f"{exc}; container cleanup was not confirmed: {cleanup['message']}"
                 ),
             )
+        finally:
+            if process is not None:
+                self._close_process_pipes(process)

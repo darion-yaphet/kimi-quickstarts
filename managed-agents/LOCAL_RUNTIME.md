@@ -10,8 +10,8 @@ From the repository root, configure `.env.kimi.local` using `.env.kimi.example`,
 then run:
 
 ```bash
-./scripts/kimi-run managed-agents python -m pip install -r requirements.txt
-./scripts/kimi-run managed-agents python kimi.py --serve
+./scripts/kimi-run managed-agents python3 -m pip install -r requirements.txt
+./scripts/kimi-run managed-agents python3 kimi.py --serve
 ```
 
 Open `http://127.0.0.1:8765/`. The tabs expose chat, knowledge, schedules and

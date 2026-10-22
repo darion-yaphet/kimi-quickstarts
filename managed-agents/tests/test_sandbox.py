@@ -268,6 +268,7 @@ class SandboxExecutorTests(unittest.TestCase):
                 return_value={"state": "present", "labels": labels},
             ),
             patch("kimi_local.sandbox.subprocess.run", return_value=removal),
+            patch("kimi_local.sandbox.time.monotonic", side_effect=[0, 3]),
         ):
             result = self.executor._cleanup(
                 "kimi-sandbox-" + "c" * 24, "job_expected", 1, "expected-owner"
@@ -275,6 +276,34 @@ class SandboxExecutorTests(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertEqual(result["code"], "container_remove_failed")
         self.assertIn("refused", result["message"])
+
+    def test_cleanup_accepts_removal_in_progress_after_absence_is_confirmed(self):
+        labels = {
+            "kimi.sandbox.job": "job_expected",
+            "kimi.sandbox.attempt": "1",
+            "kimi.sandbox.owner": "expected-owner",
+        }
+        removal = Mock(returncode=1, stderr="removal already in progress")
+        with (
+            patch.object(
+                self.executor,
+                "_inspect_container",
+                side_effect=[
+                    {"state": "present", "labels": labels},
+                    {
+                        "state": "absent",
+                        "code": "already_absent",
+                        "message": "No such container",
+                    },
+                ],
+            ),
+            patch("kimi_local.sandbox.subprocess.run", return_value=removal),
+        ):
+            result = self.executor._cleanup(
+                "kimi-sandbox-" + "c" * 24, "job_expected", 1, "expected-owner"
+            )
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["code"], "removed")
 
     def test_recover_orphans_closes_expired_attempt(self):
         job = self.executor.submit("print('abandoned')")
@@ -384,6 +413,9 @@ class SandboxExecutorTests(unittest.TestCase):
 
     def test_docker_client_environment_preserves_context_without_secrets(self):
         process = Mock(returncode=0)
+        process.stdin = Mock(closed=False)
+        process.stdout = Mock(closed=False)
+        process.stderr = Mock(closed=False)
         job = self.executor.submit("print('ok')")
         client_environment = {
             "PATH": "/custom/bin",
@@ -410,6 +442,9 @@ class SandboxExecutorTests(unittest.TestCase):
         self.assertNotIn("KIMI_API_KEY", forwarded)
         self.assertNotIn("UNRELATED_SECRET", forwarded)
         self.assertNotIn("-e", popen.call_args.args[0])
+        process.stdin.close.assert_called_once()
+        process.stdout.close.assert_called_once()
+        process.stderr.close.assert_called_once()
 
     def test_stalled_stdin_is_covered_by_execution_deadline(self):
         executor = SandboxExecutor(":memory:", timeout_seconds=0.05)
