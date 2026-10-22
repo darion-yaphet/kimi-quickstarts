@@ -70,6 +70,10 @@ Each user request permits at most 20 tool-execution turns by default. Set
 budget is used, the agent requests a final answer with tools disabled; a model
 that requests another tool receives an error without executing that tool.
 
+Tools in the same response execute sequentially by default, so edits and reads
+observe the model's order. Opt into `ModelConfig(parallel_tools=True)` only for
+independent tools whose side effects cannot conflict.
+
 ## Portable code execution and web search
 
 `CodeExecutionServerTool` and `WebSearchServerTool` keep their historical

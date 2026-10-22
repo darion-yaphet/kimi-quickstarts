@@ -33,6 +33,7 @@ class ModelConfig:
     )
     enable_prompt_caching: bool = False
     max_tool_turns: int = 20
+    parallel_tools: bool = False
 
     def __post_init__(self):
         if isinstance(self.max_tool_turns, bool) or not isinstance(self.max_tool_turns, int) or self.max_tool_turns < 1:
@@ -152,6 +153,7 @@ class Agent:
                 tool_results = await execute_tools(
                     tool_calls,
                     tool_dict,
+                    parallel=self.config.parallel_tools,
                 )
                 if self.verbose:
                     for block in tool_results:

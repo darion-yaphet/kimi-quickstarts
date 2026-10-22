@@ -25,7 +25,7 @@ async def _execute_single_tool(
 
 
 async def execute_tools(
-    tool_calls: list[Any], tool_dict: dict[str, Any], parallel: bool = True
+    tool_calls: list[Any], tool_dict: dict[str, Any], parallel: bool = False
 ) -> list[dict[str, Any]]:
     """Execute multiple tools sequentially or in parallel."""
 
