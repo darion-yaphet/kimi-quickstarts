@@ -6,6 +6,7 @@ Core agent interaction functions for running autonomous coding sessions.
 """
 
 import asyncio
+import json
 from pathlib import Path
 from typing import Optional
 
@@ -18,6 +19,43 @@ from prompts import get_initializer_prompt, get_coding_prompt, copy_spec_to_proj
 
 # Configuration
 AUTO_CONTINUE_DELAY_SECONDS = 3
+MINIMUM_FEATURE_COUNT = 200
+
+
+def initialization_artifacts_are_valid(project_dir: Path) -> bool:
+    """Return whether the initializer produced the files needed by later agents."""
+    feature_list_path = project_dir / "feature_list.json"
+    required_text_files = (project_dir / "init.sh", project_dir / "README.md")
+
+    if not feature_list_path.is_file():
+        return False
+
+    try:
+        text_files_are_valid = all(
+            path.is_file() and bool(path.read_text(encoding="utf-8").strip())
+            for path in required_text_files
+        )
+    except (OSError, UnicodeDecodeError):
+        return False
+    if not text_files_are_valid:
+        return False
+
+    try:
+        features = json.loads(feature_list_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return False
+
+    if not isinstance(features, list) or len(features) < MINIMUM_FEATURE_COUNT:
+        return False
+
+    return all(
+        isinstance(feature, dict)
+        and isinstance(feature.get("category"), str)
+        and isinstance(feature.get("description"), str)
+        and isinstance(feature.get("steps"), list)
+        and isinstance(feature.get("passes"), bool)
+        for feature in features
+    )
 
 
 async def run_agent_session(
@@ -121,9 +159,10 @@ async def run_autonomous_agent(
     # Create project directory
     project_dir.mkdir(parents=True, exist_ok=True)
 
-    # Check if this is a fresh start or continuation
-    tests_file = project_dir / "feature_list.json"
-    is_first_run = not tests_file.exists()
+    # Only coding agents may continue after the initializer has produced a
+    # complete, readable handoff. A partial or failed initializer run retries
+    # with a fresh context on the next iteration.
+    is_first_run = not initialization_artifacts_are_valid(project_dir)
 
     if is_first_run:
         print("Fresh start - will use initializer agent")
@@ -153,6 +192,7 @@ async def run_autonomous_agent(
             break
 
         # Print session header
+        is_first_run = not initialization_artifacts_are_valid(project_dir)
         print_session_header(iteration, is_first_run)
 
         # Create client (fresh context)
@@ -161,7 +201,6 @@ async def run_autonomous_agent(
         # Choose prompt based on session type
         if is_first_run:
             prompt = get_initializer_prompt()
-            is_first_run = False  # Only use initializer once
         else:
             prompt = get_coding_prompt()
 
