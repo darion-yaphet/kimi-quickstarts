@@ -32,6 +32,11 @@ class ModelConfig:
         )
     )
     enable_prompt_caching: bool = False
+    max_tool_turns: int = 20
+
+    def __post_init__(self):
+        if isinstance(self.max_tool_turns, bool) or not isinstance(self.max_tool_turns, int) or self.max_tool_turns < 1:
+            raise ValueError("max_tool_turns must be a positive integer")
 
 
 class Agent:
@@ -106,9 +111,11 @@ class Agent:
 
         tool_dict = {tool.name: tool for tool in self.tools}
 
-        while True:
+        for turn in range(self.config.max_tool_turns + 1):
             self.history.truncate()
             params = self._prepare_message_params()
+            if turn == self.config.max_tool_turns:
+                params["tool_choice"] = {"type": "none"}
 
             # Provider-specific beta headers may be supplied explicitly through
             # message_params. Portable custom tools need no beta header.
@@ -135,6 +142,13 @@ class Agent:
             )
 
             if tool_calls:
+                if turn == self.config.max_tool_turns:
+                    await self.history.add_message("user", [
+                        {"type": "tool_result", "tool_use_id": call.id,
+                         "content": "Tool turn limit reached; this tool was not executed.", "is_error": True}
+                        for call in tool_calls
+                    ])
+                    raise RuntimeError(f"Agent exceeded the tool turn limit ({self.config.max_tool_turns})")
                 tool_results = await execute_tools(
                     tool_calls,
                     tool_dict,

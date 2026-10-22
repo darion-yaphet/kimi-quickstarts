@@ -65,6 +65,11 @@ Prompt caching is disabled by default for compatibility and can be enabled
 explicitly with `ModelConfig(enable_prompt_caching=True)` when the selected
 endpoint supports Anthropic cache-control blocks.
 
+Each user request permits at most 20 tool-execution turns by default. Set
+`ModelConfig(max_tool_turns=5)` to choose another positive limit. After the
+budget is used, the agent requests a final answer with tools disabled; a model
+that requests another tool receives an error without executing that tool.
+
 ## Portable code execution and web search
 
 `CodeExecutionServerTool` and `WebSearchServerTool` keep their historical
