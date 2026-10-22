@@ -18,6 +18,9 @@ class Profile:
             "SQLite-backed sessions and event history",
             "Kimi chat through the Anthropic-compatible Messages API",
             "loopback HTTP API and interactive CLI",
+            "Document ingestion, lexical retrieval and provenance citations",
+            "Persistent one-shot and interval scheduling with run history",
+            "Isolated Python jobs when Docker and the configured image are available",
         ]
         result["hosted_capabilities"] = {
             "agents": False,
@@ -74,18 +77,16 @@ PROFILES = {
             "daily-brief",
             "Draft a concise daily brief from supplied material",
             "Summarize only material supplied in the conversation. Mark missing sources.",
-            "Interactive brief drafting is ready; unattended collection and delivery are disabled.",
-            "Add an explicit scheduler",
+            "Scheduled local brief generation with knowledge retrieval is ready; external collection and delivery are not connected.",
             "Add reviewed GitHub and Slack read connectors",
             "Add an opt-in Slack delivery action",
         ),
         _profile(
             "knowledge-wiki",
-            "Answer questions from supplied knowledge excerpts",
-            "Use supplied evidence, preserve source labels, and say when evidence is insufficient.",
-            "Conversational analysis is ready; the dreams-based ingestion pipeline is not replaced.",
-            "Build document ingestion and chunk storage",
-            "Build extraction, conflict resolution, and provenance indexing",
+            "Answer questions from locally ingested documents",
+            "Use retrieved evidence, cite the supplied citation IDs, and say when evidence is insufficient.",
+            "Local text/PDF ingestion, lexical retrieval and source citations are ready; hosted dreams are not used.",
+            "Optional semantic wiki synthesis and cross-document conflict resolution",
         ),
         _profile(
             "linear",
@@ -115,20 +116,18 @@ PROFILES = {
         ),
         _profile(
             "self-hosted-sandboxes",
-            "Discuss and plan isolated workloads",
-            "Help design sandbox tasks, but do not claim to run commands or provision infrastructure.",
-            "Local chat is ready; no worker queue or sandbox launcher is provided.",
-            "Build an authenticated work queue",
-            "Implement provider-specific isolated workers",
-            "Add resource limits and audit logs",
+            "Execute Python in isolated local Docker jobs",
+            "Use the run_python tool when available. Report its job ID, status and output accurately; do not claim to provision cloud infrastructure.",
+            "Persisted Python jobs, Docker isolation, resource limits and run audit are implemented; Docker and a prepared image are required.",
+            "Adapters for the original cloud sandbox providers",
+            "Remote worker authentication and multi-host deployment",
         ),
         _profile(
             "sentry",
             "Draft Sentry issue triage from supplied event data",
             "Rank supplied errors by user impact and explain likely causes without claiming Sentry access.",
-            "Local triage is ready; Sentry OAuth/MCP, Seer, and cron execution are not connected.",
+            "Local triage and scheduled runs are ready; Sentry OAuth/MCP and Seer are not connected.",
             "Implement Sentry authentication and read connector",
-            "Add an explicit scheduler",
             "Add Seer integration separately if licensed",
         ),
         _profile(
@@ -151,4 +150,6 @@ def get_profile(name: str) -> Profile:
         return PROFILES[name]
     except KeyError as error:
         choices = ", ".join(sorted(PROFILES))
-        raise ValueError(f"Unknown profile {name!r}. Choose one of: {choices}") from error
+        raise ValueError(
+            f"Unknown profile {name!r}. Choose one of: {choices}"
+        ) from error

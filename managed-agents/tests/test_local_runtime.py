@@ -75,7 +75,10 @@ class RuntimeTests(unittest.TestCase):
         reopened = SessionStore(self.database)
         self.assertEqual(reopened.get_session(session["id"])["status"], "idle")
         self.assertEqual(
-            [(item["role"], item["content"]) for item in reopened.events(session["id"])],
+            [
+                (item["role"], item["content"])
+                for item in reopened.events(session["id"])
+            ],
             [("user", "hello"), ("assistant", "reply:hello")],
         )
 
@@ -123,7 +126,9 @@ class ProviderTests(unittest.TestCase):
             base_url="https://api.kimi.ai/coding/",
             timeout=45.0,
         )
-        self.assertEqual(provider.complete("system", [{"role": "user", "content": "hi"}]), "done")
+        self.assertEqual(
+            provider.complete("system", [{"role": "user", "content": "hi"}]), "done"
+        )
         client.messages.create.assert_called_once_with(
             model="k3-256k",
             max_tokens=2048,
@@ -194,7 +199,9 @@ class HttpTests(unittest.TestCase):
             self.assertIn("Legacy UIs and external connectors remain pending", page)
             self.assertIn("textContent", page)
             self.assertNotIn("innerHTML", page)
-            self.assertIn("default-src 'self'", response.headers["Content-Security-Policy"])
+            self.assertIn(
+                "default-src 'self'", response.headers["Content-Security-Policy"]
+            )
 
     def test_unknown_profile_is_a_bad_request(self):
         with self.assertRaises(HTTPError) as caught:

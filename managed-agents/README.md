@@ -1,6 +1,10 @@
-# Managed Agents quickstarts
+# Kimi local agents and upstream Managed Agents examples
 
-Projects built on [Claude Managed Agents](https://platform.claude.com/docs/en/managed-agents/overview): agents Anthropic runs for you, with server-side sessions, sandboxed tools, and an event stream your app consumes. Each quickstart is a complete, runnable app that pairs Managed Agents with a real product surface.
+This fork provides local Kimi sessions, document ingestion/retrieval, persisted
+scheduling and Docker-isolated Python execution. The original product-specific
+[Claude Managed Agents](https://platform.claude.com/docs/en/managed-agents/overview)
+examples are retained below as upstream references while their UI and connector
+adapters are migrated.
 
 ## Local Kimi migration
 
@@ -9,12 +13,12 @@ host Claude Managed Agents resources. Pointing the examples below at a Kimi
 Base URL does not provide `beta.agents`, `beta.sessions`, vaults, dreams, cron,
 OAuth, hosted tools, or managed sandboxes.
 
-This fork includes [kimi.py](kimi.py), a small local replacement for the part
-that can be migrated honestly: profile-aware chat with persistent SQLite
-sessions and an append-only event history. It supports every quickstart name as
-a profile and exposes both a CLI and a loopback HTTP API. It never sends Slack
-messages, edits Linear issues, reads Sentry, launches host commands, schedules
-jobs, or fetches the web.
+This fork includes [kimi.py](kimi.py): profile-aware chat with persistent SQLite
+sessions, a document index with source citations, scheduled Kimi runs and
+audited Docker Python jobs. It supports every quickstart name as a profile and
+exposes a CLI, browser console and loopback HTTP API. It does not send Slack
+messages, edit Linear issues, read Sentry or fetch the web. See
+[LOCAL_RUNTIME.md](LOCAL_RUNTIME.md) for runnable knowledge, schedule and sandbox examples.
 
 ```bash
 cd managed-agents
@@ -45,8 +49,9 @@ curl -s -X POST http://127.0.0.1:8765/v1/sessions \
 ```
 
 Open `http://127.0.0.1:8765/` for the included local browser UI. It can select
-profiles, create and reopen persisted sessions, replay event history, and send
-messages. It uses only same-origin requests and renders all session/model text
+profiles, create and reopen persisted sessions, ingest/search documents,
+manage schedules, run isolated Python jobs and replay event history. It uses
+only same-origin requests and renders all session/model text
 through DOM `textContent`; it has no external scripts, styles, fonts, or CDNs.
 
 The service binds to `127.0.0.1` by default and has no authentication. Its
@@ -61,7 +66,7 @@ origins and non-loopback `Host` headers. Model calls have a configurable
 timeout; truncated `max_tokens` responses become error events rather than
 successful partial replies.
 
-## Quickstarts
+## Upstream quickstarts (original hosted integrations)
 
 - **[assistant-ui/](assistant-ui/)** puts a spreadsheet analyst in a
   browser chat built entirely from assistant-ui primitives. Sessions are

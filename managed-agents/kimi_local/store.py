@@ -63,6 +63,14 @@ class SessionStore:
                     ON events(session_id, id);
                 """
             )
+            connection.execute("BEGIN IMMEDIATE")
+            columns = {
+                row[1] for row in connection.execute("PRAGMA table_info(sessions)")
+            }
+            if "knowledge_collection" not in columns:
+                connection.execute(
+                    "ALTER TABLE sessions ADD COLUMN knowledge_collection TEXT"
+                )
             connection.commit()
         finally:
             self._close(connection)
@@ -77,14 +85,28 @@ class SessionStore:
         event["metadata"] = json.loads(event["metadata"])
         return event
 
-    def create_session(self, profile: str, title: str = "New session") -> dict:
+    def create_session(
+        self,
+        profile: str,
+        title: str = "New session",
+        knowledge_collection: str | None = None,
+    ) -> dict:
         session_id = f"ks_{secrets.token_urlsafe(18)}"
         timestamp = _now()
         connection = self._connect()
         try:
             connection.execute(
-                "INSERT INTO sessions VALUES (?, ?, ?, 'idle', ?, ?)",
-                (session_id, profile, title[:120] or "New session", timestamp, timestamp),
+                """INSERT INTO sessions
+                   (id, profile, title, status, created_at, updated_at, knowledge_collection)
+                   VALUES (?, ?, ?, 'idle', ?, ?, ?)""",
+                (
+                    session_id,
+                    profile,
+                    title[:120] or "New session",
+                    timestamp,
+                    timestamp,
+                    knowledge_collection,
+                ),
             )
             connection.commit()
         finally:

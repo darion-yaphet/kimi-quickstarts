@@ -3,85 +3,156 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Kimi Quickstarts Local Sessions</title>
+    <title>Kimi Quickstarts Local Runtime</title>
     <style>
-      :root { color-scheme: light dark; font: 15px/1.45 system-ui, sans-serif; }
+      :root { color-scheme: dark; font: 15px/1.45 system-ui, sans-serif; }
       * { box-sizing: border-box; }
       body { margin: 0; background: #111827; color: #e5e7eb; }
-      button, input, select, textarea { font: inherit; }
-      button, input, select, textarea { border: 1px solid #4b5563; border-radius: 8px; padding: .65rem; background: #1f2937; color: inherit; }
+      button, input, select, textarea { font: inherit; border: 1px solid #4b5563; border-radius: 8px; padding: .65rem; background: #1f2937; color: inherit; }
       button { cursor: pointer; }
       button:hover { background: #374151; }
-      button:disabled { cursor: wait; opacity: .55; }
+      button:disabled { cursor: not-allowed; opacity: .55; }
+      input, select, textarea { width: 100%; }
+      textarea { min-height: 88px; resize: vertical; }
       header { padding: 1rem 1.25rem; border-bottom: 1px solid #374151; }
       header h1 { margin: 0 0 .25rem; font-size: 1.2rem; }
       header p { margin: 0; color: #fbbf24; }
-      main { display: grid; grid-template-columns: minmax(240px, 320px) 1fr; height: calc(100vh - 86px); }
+      nav { display: flex; gap: .5rem; padding: .75rem 1rem; border-bottom: 1px solid #374151; overflow-x: auto; }
+      nav button[aria-selected="true"] { border-color: #60a5fa; background: #1e3a5f; }
+      main { min-height: calc(100vh - 142px); }
+      .panel { padding: 1rem; }
+      .panel[hidden] { display: none; }
+      .chat-grid { display: grid; grid-template-columns: minmax(240px, 320px) 1fr; min-height: calc(100vh - 174px); margin: -1rem; }
       aside { padding: 1rem; border-right: 1px solid #374151; overflow: auto; }
-      aside label { display: block; margin: 0 0 .35rem; color: #9ca3af; }
-      aside select, aside input { width: 100%; margin-bottom: .75rem; }
-      .new-row { display: grid; grid-template-columns: 1fr auto; gap: .5rem; }
-      #profile-status { margin: .75rem 0 1rem; color: #9ca3af; }
-      #sessions { display: grid; gap: .45rem; }
+      label { display: block; margin: .7rem 0 .3rem; color: #cbd5e1; }
+      h2 { margin: .25rem 0 1rem; font-size: 1.15rem; }
+      h3 { margin: 1.25rem 0 .5rem; font-size: 1rem; }
+      .muted, small { color: #9ca3af; }
+      .row { display: grid; grid-template-columns: 1fr auto; gap: .5rem; align-items: end; }
+      .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: .75rem; }
+      .actions { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .75rem; }
+      .stack { display: grid; gap: .55rem; }
+      .card { padding: .75rem; border: 1px solid #374151; border-radius: 10px; background: #172033; overflow-wrap: anywhere; }
+      .card strong { display: block; }
+      .card pre { margin: .6rem 0 0; padding: .65rem; border-radius: 6px; background: #0b1020; color: #d1fae5; white-space: pre-wrap; overflow-wrap: anywhere; }
       .session { text-align: left; width: 100%; }
       .session.active { border-color: #60a5fa; background: #1e3a5f; }
-      .session small { display: block; color: #9ca3af; }
-      section { display: grid; grid-template-rows: 1fr auto; min-width: 0; }
+      .session small { display: block; }
+      .chat { display: grid; grid-template-rows: 1fr auto auto; min-width: 0; }
       #messages { overflow: auto; padding: 1.25rem; }
       .message { max-width: 760px; padding: .8rem 1rem; margin: 0 0 .8rem; border-radius: 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
       .message.user { margin-left: auto; background: #1d4ed8; }
       .message.assistant { background: #1f2937; }
       .message.error { border: 1px solid #b91c1c; color: #fecaca; }
-      .message small { display: block; margin-bottom: .3rem; opacity: .7; }
+      .citations { margin: .6rem 0 0; padding-left: 1.25rem; color: #bfdbfe; font-size: .85rem; }
       #composer { display: grid; grid-template-columns: 1fr auto; gap: .75rem; padding: 1rem; border-top: 1px solid #374151; }
-      #composer textarea { min-height: 72px; resize: vertical; }
-      #notice { min-height: 1.5rem; padding: 0 1rem; color: #fca5a5; }
+      #notice { min-height: 1.5rem; padding: 0 1rem .5rem; color: #fca5a5; }
+      .panel-notice { min-height: 1.5rem; color: #fca5a5; }
       @media (max-width: 720px) {
-        main { display: block; height: auto; }
+        .chat-grid { display: block; }
         aside { border-right: 0; border-bottom: 1px solid #374151; }
-        section { min-height: 65vh; }
+        .chat { min-height: 65vh; }
+        #composer { grid-template-columns: 1fr; }
       }
     </style>
   </head>
   <body>
     <header>
-      <h1>Kimi Quickstarts · Local Sessions</h1>
-      <p>Legacy UIs and external connectors remain pending. This page cannot post to Slack, Linear, Sentry, or other services.</p>
+      <h1>Kimi Quickstarts · Local Runtime</h1>
+      <p>Legacy UIs and external connectors remain pending. Local knowledge, schedules, and isolated Python jobs are available. This page cannot post to Slack, Linear, Sentry, or other services.</p>
     </header>
+    <nav role="tablist" aria-label="Local runtime features">
+      <button type="button" role="tab" aria-selected="true" aria-controls="chat-panel" data-panel="chat-panel">Chat</button>
+      <button type="button" role="tab" aria-selected="false" aria-controls="knowledge-panel" data-panel="knowledge-panel">Knowledge</button>
+      <button type="button" role="tab" aria-selected="false" aria-controls="schedules-panel" data-panel="schedules-panel">Schedules</button>
+      <button type="button" role="tab" aria-selected="false" aria-controls="sandbox-panel" data-panel="sandbox-panel">Python sandbox</button>
+    </nav>
     <main>
-      <aside>
-        <label for="profile">Profile</label>
-        <select id="profile"></select>
-        <div id="profile-status"></div>
-        <label for="title">New session title</label>
-        <div class="new-row">
-          <input id="title" value="New session" maxlength="120">
-          <button id="create" type="button">Create</button>
+      <section id="chat-panel" class="panel" role="tabpanel">
+        <div class="chat-grid">
+          <aside>
+            <label for="profile">Profile</label>
+            <select id="profile"></select>
+            <div id="profile-status" class="muted"></div>
+            <label for="collection">Knowledge collection</label>
+            <input id="collection" value="default" maxlength="64" pattern="[A-Za-z0-9_-]+">
+            <label for="title">New session title</label>
+            <div class="row"><input id="title" value="New session" maxlength="120"><button id="create" type="button">Create</button></div>
+            <h3>Persisted sessions</h3>
+            <div id="sessions" class="stack"></div>
+          </aside>
+          <div class="chat">
+            <div id="messages"></div>
+            <div id="notice" role="status" aria-live="polite"></div>
+            <form id="composer">
+              <textarea id="message" required maxlength="100000" aria-label="Message" placeholder="Send a message to the selected local session"></textarea>
+              <button id="send" type="submit">Send</button>
+            </form>
+          </div>
         </div>
-        <h2>Persisted sessions</h2>
-        <div id="sessions"></div>
-      </aside>
-      <section>
-        <div id="messages"></div>
-        <div id="notice" role="status"></div>
-        <form id="composer">
-          <textarea id="message" required maxlength="100000" placeholder="Send a message to the selected local session"></textarea>
-          <button id="send" type="submit">Send</button>
+      </section>
+
+      <section id="knowledge-panel" class="panel" role="tabpanel" hidden>
+        <h2>Local knowledge</h2>
+        <p class="muted">Documents are indexed locally. Retrieved excerpts are sent to Kimi when used in chat.</p>
+        <div class="fields">
+          <div><label for="knowledge-collection">Collection</label><input id="knowledge-collection" value="default" maxlength="64" pattern="[A-Za-z0-9_-]+"></div>
+          <div><label for="knowledge-file">Text file</label><input id="knowledge-file" type="file" accept=".txt,.md,.json,.csv,.html,.htm,text/*"></div>
+          <div><label for="knowledge-source">Source label</label><input id="knowledge-source" maxlength="2048" placeholder="Filled from filename"></div>
+        </div>
+        <div class="actions"><button id="knowledge-upload" type="button">Upload document</button><button id="knowledge-list" type="button">List documents</button></div>
+        <form id="knowledge-search-form" class="row">
+          <div><label for="knowledge-query">Search</label><input id="knowledge-query" required maxlength="10000" placeholder="Search in English or Chinese"></div>
+          <button type="submit">Search</button>
         </form>
+        <div id="knowledge-notice" class="panel-notice" role="status" aria-live="polite"></div>
+        <div id="knowledge-results" class="stack"></div>
+      </section>
+
+      <section id="schedules-panel" class="panel" role="tabpanel" hidden>
+        <h2>Persistent schedules</h2>
+        <p class="muted">Create a recurring interval or a one-time run. The local time you enter is stored in UTC. Scheduled prompts use the selected profile and optional knowledge collection.</p>
+        <div class="fields">
+          <div><label for="schedule-title">Title</label><input id="schedule-title" maxlength="120" placeholder="Daily brief"></div>
+          <div><label for="schedule-profile">Profile</label><select id="schedule-profile"></select></div>
+          <div><label for="schedule-collection">Knowledge collection</label><input id="schedule-collection" maxlength="64" placeholder="Optional"></div>
+          <div><label for="schedule-interval">Repeat every seconds</label><input id="schedule-interval" type="number" min="1" step="1" placeholder="3600"></div>
+          <div><label for="schedule-run-at">Or run once at (local time)</label><input id="schedule-run-at" type="datetime-local"></div>
+        </div>
+        <label for="schedule-prompt">Prompt</label>
+        <textarea id="schedule-prompt" required maxlength="100000" placeholder="What should Kimi do?"></textarea>
+        <div class="actions"><button id="schedule-create" type="button">Create schedule</button><button id="schedule-refresh" type="button">Refresh</button></div>
+        <div id="schedule-notice" class="panel-notice" role="status" aria-live="polite"></div>
+        <div id="schedules" class="stack"></div>
+        <h3>Selected run history</h3>
+        <div id="schedule-runs" class="stack muted">Select “History” on a schedule.</div>
+      </section>
+
+      <section id="sandbox-panel" class="panel" role="tabpanel" hidden>
+        <h2>Isolated Python sandbox</h2>
+        <p id="sandbox-capability" class="muted">Checking the Docker-backed sandbox…</p>
+        <label for="sandbox-code">Python code</label>
+        <textarea id="sandbox-code" maxlength="20000" spellcheck="false">print("Hello from the Kimi sandbox")</textarea>
+        <div class="actions"><button id="sandbox-submit" type="button">Queue job</button><button id="sandbox-refresh" type="button">Refresh jobs</button><button id="sandbox-recover" type="button">Recover expired jobs</button></div>
+        <div id="sandbox-notice" class="panel-notice" role="status" aria-live="polite"></div>
+        <div id="sandbox-jobs" class="stack"></div>
       </section>
     </main>
     <script>
-      const profileSelect = document.querySelector('#profile');
-      const profileStatus = document.querySelector('#profile-status');
-      const sessionsNode = document.querySelector('#sessions');
-      const messagesNode = document.querySelector('#messages');
-      const notice = document.querySelector('#notice');
-      const titleInput = document.querySelector('#title');
-      const messageInput = document.querySelector('#message');
-      const createButton = document.querySelector('#create');
-      const sendButton = document.querySelector('#send');
+      const $ = (selector) => document.querySelector(selector);
+      const profileSelect = $('#profile');
+      const scheduleProfile = $('#schedule-profile');
+      const profileStatus = $('#profile-status');
+      const sessionsNode = $('#sessions');
+      const messagesNode = $('#messages');
+      const notice = $('#notice');
+      const titleInput = $('#title');
+      const messageInput = $('#message');
+      const createButton = $('#create');
+      const sendButton = $('#send');
       let profiles = new Map();
       let activeSession = null;
+      let sandboxAvailable = false;
 
       async function request(path, options = {}) {
         const response = await fetch(path, options);
@@ -89,32 +160,45 @@
         if (!response.ok) throw new Error(payload.details || payload.error || `HTTP ${response.status}`);
         return payload;
       }
-
-      function setNotice(message = '') { notice.textContent = message; }
-
+      function jsonPost(body) { return { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }; }
       function element(tag, text, className) {
         const node = document.createElement(tag);
         if (text !== undefined) node.textContent = text;
         if (className) node.className = className;
         return node;
       }
+      function setNotice(message = '') { notice.textContent = message; }
+      function setPanelNotice(name, message = '') { $(`#${name}-notice`).textContent = message; }
+      function collectionValue(selector, optional = false) {
+        const value = $(selector).value.trim();
+        if (!value && optional) return null;
+        if (!/^[A-Za-z0-9_-]{1,64}$/.test(value)) throw new Error('Collection must use 1–64 letters, numbers, underscores, or hyphens.');
+        return value;
+      }
+
+      for (const tab of document.querySelectorAll('[role="tab"]')) {
+        tab.addEventListener('click', () => {
+          for (const candidate of document.querySelectorAll('[role="tab"]')) candidate.setAttribute('aria-selected', String(candidate === tab));
+          for (const panel of document.querySelectorAll('[role="tabpanel"]')) panel.hidden = panel.id !== tab.dataset.panel;
+        });
+      }
 
       function showProfileStatus() {
         const profile = profiles.get(profileSelect.value);
         profileStatus.textContent = profile ? profile.integration_status : '';
       }
-
       async function loadProfiles() {
         const payload = await request('/v1/profiles');
         profiles = new Map(payload.profiles.map((profile) => [profile.name, profile]));
         for (const profile of payload.profiles) {
-          const option = element('option', profile.name);
-          option.value = profile.name;
-          profileSelect.append(option);
+          for (const select of [profileSelect, scheduleProfile]) {
+            const option = element('option', profile.name);
+            option.value = profile.name;
+            select.append(option);
+          }
         }
         showProfileStatus();
       }
-
       async function loadSessions() {
         const payload = await request(`/v1/sessions?profile=${encodeURIComponent(profileSelect.value)}`);
         sessionsNode.replaceChildren();
@@ -122,12 +206,17 @@
           const button = element('button', undefined, `session${session.id === activeSession ? ' active' : ''}`);
           button.type = 'button';
           button.append(element('span', session.title));
-          button.append(element('small', `${session.status} · ${new Date(session.updated_at).toLocaleString()}`));
+          button.append(element('small', `${session.status} · ${session.knowledge_collection || 'no knowledge'} · ${new Date(session.updated_at).toLocaleString()}`));
           button.addEventListener('click', () => selectSession(session.id));
           sessionsNode.append(button);
         }
       }
-
+      function appendCitations(message, sources) {
+        if (!Array.isArray(sources) || !sources.length) return;
+        const list = element('ul', undefined, 'citations');
+        for (const source of sources) list.append(element('li', `${source.citation_id || 'citation'} · ${source.source || 'local knowledge'}`));
+        message.append(list);
+      }
       async function selectSession(sessionId) {
         activeSession = sessionId;
         setNotice();
@@ -138,6 +227,7 @@
             const message = element('article', undefined, `message ${event.role}`);
             message.append(element('small', event.role));
             message.append(element('div', event.content || ''));
+            appendCitations(message, event.metadata && event.metadata.sources);
             messagesNode.append(message);
           } else if (event.type === 'error') {
             const message = element('article', undefined, 'message error');
@@ -149,26 +239,17 @@
         messagesNode.scrollTop = messagesNode.scrollHeight;
         await loadSessions();
       }
-
       async function createSession() {
         createButton.disabled = true;
         setNotice();
         try {
-          const payload = await request('/v1/sessions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ profile: profileSelect.value, title: titleInput.value }),
-          });
+          const payload = await request('/v1/sessions', jsonPost({ profile: profileSelect.value, title: titleInput.value, knowledge_collection: collectionValue('#collection') }));
           await selectSession(payload.session.id);
           messageInput.focus();
-        } catch (error) {
-          setNotice(error.message);
-        } finally {
-          createButton.disabled = false;
-        }
+        } catch (error) { setNotice(error.message); }
+        finally { createButton.disabled = false; }
       }
-
-      document.querySelector('#composer').addEventListener('submit', async (event) => {
+      $('#composer').addEventListener('submit', async (event) => {
         event.preventDefault();
         if (!activeSession) return setNotice('Create or select a session first.');
         const content = messageInput.value.trim();
@@ -176,21 +257,196 @@
         sendButton.disabled = true;
         setNotice('Waiting for Kimi…');
         try {
-          await request(`/v1/sessions/${encodeURIComponent(activeSession)}/messages`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ content }),
-          });
+          await request(`/v1/sessions/${encodeURIComponent(activeSession)}/messages`, jsonPost({ content }));
           messageInput.value = '';
           setNotice();
           await selectSession(activeSession);
-        } catch (error) {
-          await selectSession(activeSession);
-          setNotice(error.message);
-        } finally {
-          sendButton.disabled = false;
-        }
+        } catch (error) { await selectSession(activeSession); setNotice(error.message); }
+        finally { sendButton.disabled = false; }
       });
+
+      async function listKnowledge() {
+        const collection = collectionValue('#knowledge-collection');
+        const payload = await request(`/v1/knowledge/documents?collection=${encodeURIComponent(collection)}`);
+        const output = $('#knowledge-results');
+        output.replaceChildren();
+        for (const document of payload.documents) {
+          const card = element('article', undefined, 'card');
+          card.append(element('strong', document.source));
+          card.append(element('small', `${document.chunk_count} chunks · ${document.byte_size} bytes · ${document.content_hash.slice(0, 12)}`));
+          output.append(card);
+        }
+        if (!payload.documents.length) output.append(element('p', 'No documents in this collection.', 'muted'));
+      }
+      $('#knowledge-upload').addEventListener('click', async () => {
+        const button = $('#knowledge-upload');
+        const file = $('#knowledge-file').files[0];
+        if (!file) return setPanelNotice('knowledge', 'Choose a text file first.');
+        if (file.size > 750000) return setPanelNotice('knowledge', 'Browser uploads are limited to 750 KB by the local HTTP API.');
+        button.disabled = true;
+        setPanelNotice('knowledge', 'Reading and indexing…');
+        try {
+          await request('/v1/knowledge/documents', jsonPost({ text: await file.text(), source: $('#knowledge-source').value.trim() || file.name, collection: collectionValue('#knowledge-collection') }));
+          setPanelNotice('knowledge', 'Document indexed.');
+          await listKnowledge();
+        } catch (error) { setPanelNotice('knowledge', error.message); }
+        finally { button.disabled = false; }
+      });
+      $('#knowledge-list').addEventListener('click', async () => {
+        setPanelNotice('knowledge');
+        try { await listKnowledge(); } catch (error) { setPanelNotice('knowledge', error.message); }
+      });
+      $('#knowledge-search-form').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        setPanelNotice('knowledge', 'Searching…');
+        try {
+          const query = $('#knowledge-query').value.trim();
+          const collection = collectionValue('#knowledge-collection');
+          const payload = await request(`/v1/knowledge/search?q=${encodeURIComponent(query)}&collection=${encodeURIComponent(collection)}&limit=10`);
+          const output = $('#knowledge-results');
+          output.replaceChildren();
+          for (const result of payload.results) {
+            const card = element('article', undefined, 'card');
+            card.append(element('strong', result.source));
+            const location = result.page ? `page ${result.page}` : `lines ${result.line_start}–${result.line_end}`;
+            card.append(element('small', `${result.citation_id} · ${location} · score ${result.score}`));
+            card.append(element('p', result.content));
+            output.append(card);
+          }
+          if (!payload.results.length) output.append(element('p', 'No matching chunks.', 'muted'));
+          setPanelNotice('knowledge');
+        } catch (error) { setPanelNotice('knowledge', error.message); }
+      });
+
+      function utcValue(localValue) {
+        if (!localValue) return null;
+        const date = new Date(localValue);
+        if (Number.isNaN(date.valueOf())) throw new Error('Run time is invalid.');
+        return date.toISOString();
+      }
+      async function loadScheduleRuns(jobId) {
+        const payload = await request(`/v1/schedules/runs?job_id=${encodeURIComponent(jobId)}`);
+        const output = $('#schedule-runs');
+        output.replaceChildren();
+        for (const run of payload.runs) {
+          const card = element('article', undefined, 'card');
+          card.append(element('strong', `${run.status} · ${new Date(run.started_at).toLocaleString()}`));
+          if (run.error) card.append(element('pre', JSON.stringify(run.error, null, 2)));
+          else if (run.result) card.append(element('pre', JSON.stringify(run.result, null, 2)));
+          output.append(card);
+        }
+        if (!payload.runs.length) output.append(element('p', 'No runs yet.', 'muted'));
+      }
+      async function loadSchedules() {
+        const payload = await request('/v1/schedules');
+        const output = $('#schedules');
+        output.replaceChildren();
+        for (const job of payload.jobs) {
+          const card = element('article', undefined, 'card');
+          card.append(element('strong', job.title || job.prompt.slice(0, 80)));
+          const cadence = job.interval_seconds ? `every ${job.interval_seconds}s` : `once at ${new Date(job.run_at).toLocaleString()}`;
+          card.append(element('small', `${job.enabled ? 'enabled' : 'disabled'} · ${job.profile} · ${cadence} · next ${job.next_run_at ? new Date(job.next_run_at).toLocaleString() : 'none'}`));
+          const actions = element('div', undefined, 'actions');
+          const toggle = element('button', job.enabled ? 'Disable' : 'Enable');
+          toggle.type = 'button';
+          toggle.addEventListener('click', async () => {
+            try { await request(`/v1/schedules/${encodeURIComponent(job.id)}/${job.enabled ? 'disable' : 'enable'}`, jsonPost({})); await loadSchedules(); }
+            catch (error) { setPanelNotice('schedule', error.message); }
+          });
+          const history = element('button', 'History');
+          history.type = 'button';
+          history.addEventListener('click', async () => {
+            try { await loadScheduleRuns(job.id); } catch (error) { setPanelNotice('schedule', error.message); }
+          });
+          actions.append(toggle, history);
+          card.append(actions);
+          output.append(card);
+        }
+        if (!payload.jobs.length) output.append(element('p', 'No schedules.', 'muted'));
+      }
+      $('#schedule-create').addEventListener('click', async () => {
+        const button = $('#schedule-create');
+        const intervalText = $('#schedule-interval').value.trim();
+        const runAtText = $('#schedule-run-at').value;
+        if (Boolean(intervalText) === Boolean(runAtText)) return setPanelNotice('schedule', 'Set either an interval or a one-time run, but not both.');
+        button.disabled = true;
+        setPanelNotice('schedule', 'Creating…');
+        try {
+          const body = { profile: scheduleProfile.value, prompt: $('#schedule-prompt').value.trim(), title: $('#schedule-title').value.trim(), knowledge_collection: collectionValue('#schedule-collection', true) };
+          if (intervalText) body.interval_seconds = Number(intervalText);
+          else body.run_at = utcValue(runAtText);
+          await request('/v1/schedules', jsonPost(body));
+          setPanelNotice('schedule', 'Schedule created.');
+          await loadSchedules();
+        } catch (error) { setPanelNotice('schedule', error.message); }
+        finally { button.disabled = false; }
+      });
+      $('#schedule-refresh').addEventListener('click', () => loadSchedules().catch((error) => setPanelNotice('schedule', error.message)));
+
+      function sandboxJobCard(job) {
+        const card = element('article', undefined, 'card');
+        card.append(element('strong', `${job.status} · ${job.id}`));
+        card.append(element('small', `${job.language} · ${new Date(job.created_at).toLocaleString()}`));
+        if (job.stdout) card.append(element('pre', job.stdout));
+        if (job.stderr) card.append(element('pre', job.stderr));
+        if (job.error_message) card.append(element('p', job.error_message, 'message error'));
+        if (job.status === 'queued') {
+          const run = element('button', 'Run in container');
+          run.type = 'button';
+          run.disabled = !sandboxAvailable;
+          run.addEventListener('click', async () => {
+            run.disabled = true;
+            setPanelNotice('sandbox', 'Running isolated job…');
+            try { await request(`/v1/sandbox/jobs/${encodeURIComponent(job.id)}/run`, jsonPost({})); setPanelNotice('sandbox'); await loadSandboxJobs(); }
+            catch (error) { setPanelNotice('sandbox', error.message); }
+          });
+          const actions = element('div', undefined, 'actions');
+          actions.append(run);
+          card.append(actions);
+        }
+        return card;
+      }
+      async function loadSandboxJobs() {
+        const payload = await request('/v1/sandbox/jobs');
+        const output = $('#sandbox-jobs');
+        output.replaceChildren();
+        for (const summary of payload.jobs) {
+          const detail = await request(`/v1/sandbox/jobs/${encodeURIComponent(summary.id)}`);
+          output.append(sandboxJobCard(detail.job));
+        }
+        if (!payload.jobs.length) output.append(element('p', 'No sandbox jobs.', 'muted'));
+      }
+      $('#sandbox-submit').addEventListener('click', async () => {
+        const button = $('#sandbox-submit');
+        button.disabled = true;
+        setPanelNotice('sandbox', 'Queueing…');
+        try {
+          await request('/v1/sandbox/jobs', jsonPost({ code: $('#sandbox-code').value, language: 'python', session_id: activeSession }));
+          setPanelNotice('sandbox', 'Job queued. Use “Run in container” to execute it.');
+          await loadSandboxJobs();
+        } catch (error) { setPanelNotice('sandbox', error.message); }
+        finally { button.disabled = !sandboxAvailable; }
+      });
+      $('#sandbox-refresh').addEventListener('click', () => loadSandboxJobs().catch((error) => setPanelNotice('sandbox', error.message)));
+      $('#sandbox-recover').addEventListener('click', async () => {
+        const button = $('#sandbox-recover');
+        button.disabled = true;
+        setPanelNotice('sandbox', 'Reconciling expired or unconfirmed jobs…');
+        try {
+          const result = await request('/v1/sandbox/recover', jsonPost({}));
+          await loadSandboxJobs();
+          setPanelNotice('sandbox', `Reconciled ${result.jobs.length} jobs. Live leased jobs were not touched.`);
+        } catch (error) { setPanelNotice('sandbox', error.message); }
+        finally { button.disabled = false; }
+      });
+      async function loadCapabilities() {
+        const capabilities = await request('/v1/capabilities');
+        sandboxAvailable = Boolean(capabilities.sandbox && capabilities.sandbox.available);
+        $('#sandbox-submit').disabled = !sandboxAvailable;
+        $('#sandbox-capability').textContent = sandboxAvailable
+          ? `Ready: ${capabilities.sandbox.image || 'local Docker image'}; host execution is disabled.`
+          : `Unavailable: ${(capabilities.sandbox && capabilities.sandbox.reason) || 'sandbox backend is not ready'}. Host execution is disabled.`;
+      }
 
       createButton.addEventListener('click', createSession);
       profileSelect.addEventListener('change', async () => {
@@ -199,14 +455,11 @@
         showProfileStatus();
         await loadSessions();
       });
-
       (async () => {
         try {
           await loadProfiles();
-          await loadSessions();
-        } catch (error) {
-          setNotice(error.message);
-        }
+          await Promise.all([loadSessions(), loadCapabilities(), listKnowledge(), loadSchedules(), loadSandboxJobs()]);
+        } catch (error) { setNotice(error.message); }
       })();
     </script>
   </body>

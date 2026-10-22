@@ -7,8 +7,9 @@ Messages endpoint for model calls. The Anthropic SDK remains a protocol client;
 it does not require an Anthropic API key when configured for Kimi.
 
 The core examples have Kimi execution paths. The Managed Agents migration is
-in progress: a local session service is available, while its original product
-UIs, external connectors, and hosted cloud features still need adapters.
+in progress: local sessions, document ingestion/retrieval, scheduling and Docker
+Python execution are available, while original product UIs and external
+connectors still need adapters.
 
 ## Configure once
 

@@ -21,6 +21,7 @@ jobs:
       - uses: astral-sh/ruff-action@v1
         with:
           src: "computer-use-demo"
+          version: "0.6.7"
   pyright:
     runs-on: ubuntu-latest
     defaults:

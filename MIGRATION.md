@@ -18,7 +18,7 @@ this clone.
 | `computer-use-best-practices` | Kimi provider with explicit local tools; Claude hosted computer/advisor/compaction/effort omitted | 124 tests passed; Ruff and Pyright passed. Native desktop operation requires macOS permissions and an isolated test environment. |
 | `browser-toolset` | Python/TypeScript custom tools backed by CDP driver; portable browser-state results | SDK policy/normalization and truncation tests pass; TypeScript strict checks pass. Python and TypeScript browser exercises passed against Chromium, and a real Kimi + Chromium navigate/read/click/read loop passed. |
 | `computer-toolset` | Python/TypeScript custom tools backed by VNC driver; confirmation hooks retained | Mock loop/truncation tests and TypeScript strict checks pass. No live VNC desktop is available here. |
-| `managed-agents` | New local Kimi session runtime with SQLite, browser UI, CLI/HTTP and eleven profiles | 13 runtime/provider/HTTP tests and a real Kimi chat with persistence pass. Browser UI create/chat/reload/safe-text rendering passed. Original product interfaces and cloud integrations are **not fully migrated**. |
+| `managed-agents` | Local Kimi sessions, document ingestion/retrieval, durable scheduling and Docker Python jobs with browser/CLI/HTTP access | Deterministic runtime, knowledge, schedule, sandbox and API tests; live Kimi and browser checks. Real Docker execution has a separate opt-in CI job. Original product interfaces and cloud integrations are **not fully migrated**. |
 
 ## Shared configuration
 
@@ -40,9 +40,11 @@ the per-profile capability matrix and implemented local endpoints.
 The original `assistant-ui`, Chat SDK, CopilotKit/AG-UI and road-trip interfaces
 still need local session adapters and streaming/tool-rendering support. Slack,
 Linear and Sentry integrations still need their connectors and request/OAuth
-handling. Knowledge wiki needs document ingestion and provenance storage.
-Unattended briefs need scheduling and explicit delivery. Self-hosted sandboxes
-need a work queue and isolated executors. Kimi does not provide Anthropic's
+handling. Knowledge ingestion/provenance, local scheduling and isolated Docker
+execution now have working local replacements; see
+[LOCAL_RUNTIME.md](managed-agents/LOCAL_RUNTIME.md). External brief delivery,
+semantic wiki synthesis and original multi-cloud sandbox adapters remain.
+Kimi does not provide Anthropic's
 hosted Agents, Sessions, Vaults or Dreams APIs by changing a base URL.
 
 The local service supplies a usable session/persistence foundation for that
