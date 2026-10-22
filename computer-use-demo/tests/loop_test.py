@@ -18,6 +18,25 @@ from computer_use_demo.loop import (
 )
 
 
+async def test_truncated_response_never_executes_partial_tools():
+    client = mock.Mock()
+    raw = client.messages.with_raw_response.create.return_value
+    raw.parse.side_effect = [
+        mock.Mock(content=[ToolUseBlock(type="tool_use", id="partial", name="computer", input={"action": "screenshot"})], stop_reason="max_tokens"),
+        mock.Mock(content=[TextBlock(type="text", text="Done")], stop_reason="end_turn"),
+    ]
+    tools = mock.Mock()
+    tools.to_params.return_value = [{"name": "computer", "type": "computer_20250124"}]
+    tools.run = mock.AsyncMock(return_value=mock.Mock(output="result", error=None, base64_image=None))
+    callback = mock.Mock()
+    messages = [{"role": "user", "content": "Inspect"}]
+    with mock.patch("computer_use_demo.loop.Anthropic", return_value=client), mock.patch("computer_use_demo.loop.ToolCollection", return_value=tools):
+        result = await sampling_loop(model="test", provider=APIProvider.KIMI, system_prompt_suffix="", messages=messages, output_callback=mock.Mock(), tool_output_callback=mock.Mock(), api_response_callback=callback, api_key="test", tool_version="computer_use_20250124")
+    tools.run.assert_not_awaited()
+    assert result == [{"role": "user", "content": "Inspect"}]
+    assert "max_tokens" in str(callback.call_args.args[2])
+
+
 async def test_loop():
     client = mock.Mock()
     client.beta.messages.with_raw_response.create.return_value = mock.Mock()

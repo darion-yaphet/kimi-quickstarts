@@ -216,11 +216,18 @@ async def sampling_loop(
             api_response_callback(e.request, e.body, e)
             return messages
 
+        response = raw_response.parse()
+        if getattr(response, "stop_reason", None) == "max_tokens":
+            api_response_callback(
+                raw_response.http_response.request,
+                raw_response.http_response,
+                RuntimeError("Model response reached max_tokens; no partial tools were executed. Increase the output token limit and retry."),
+            )
+            return messages
+
         api_response_callback(
             raw_response.http_response.request, raw_response.http_response, None
         )
-
-        response = raw_response.parse()
 
         response_params = _response_to_params(
             response, exclude_none=provider == APIProvider.KIMI
