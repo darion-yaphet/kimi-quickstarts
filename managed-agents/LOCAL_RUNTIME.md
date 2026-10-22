@@ -6,6 +6,12 @@ Existing sessions are migrated without removing their messages.
 
 ## Start
 
+To try the same session, knowledge and scheduling flow offline, run
+`python3 kimi.py demo`, or `python3 kimi.py --demo --serve` for the browser UI.
+This uses a separate demo database, fixed sample replies, no credentials and
+no Python execution. See [SIMULATION.md](SIMULATION.md) for examples and the
+distinction between real local services and simulated external integrations.
+
 From the repository root, configure `.env.kimi.local` using `.env.kimi.example`,
 then run:
 

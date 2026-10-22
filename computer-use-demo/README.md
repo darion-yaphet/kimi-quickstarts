@@ -1,237 +1,162 @@
 # Kimi Computer Use Demo
 
-This fork defaults to Kimi Code and ordinary custom computer, bash and editor
-tools. Follow the Kimi quickstart below and build the local image. The upstream
-Claude provider paths remain optional; their model-specific configuration does
-not apply to Kimi.
+This demo runs Kimi Code in a Linux desktop container. Kimi can inspect
+screenshots, control the mouse and keyboard, run shell commands, and edit files
+through ordinary custom tools.
 
-> [!NOTE]
-> The default provider is Kimi with model `kimi-for-coding`. Model-side reasoning
-> follows Kimi's default; the Claude-specific thinking controls apply only when
-> you explicitly select a Claude provider.
+The reference implementation includes:
+
+- A Docker image with a lightweight Linux desktop, Firefox, LibreOffice, and common utilities
+- A Kimi Code agent loop using a Messages-compatible API endpoint
+- Local computer, shell, and file-editing tools
+- A Streamlit chat interface with an embedded noVNC desktop view
 
 > [!CAUTION]
-> Computer use is a beta feature. Please be aware that computer use poses unique risks that are distinct from standard API features or chat interfaces. These risks are heightened when using computer use to interact with the internet. To minimize risks, consider taking precautions such as:
+> Computer control carries more risk than an ordinary chat interface. Run this
+> demo in a disposable, minimally privileged environment. Do not mount
+> sensitive files or credentials. Restrict network access where practical and
+> review consequential actions such as purchases, account changes, downloads,
+> and acceptance of terms.
 >
-> 1. Use a dedicated virtual machine or container with minimal privileges to prevent direct system attacks or accidents.
-> 2. Avoid giving the model access to sensitive data, such as account login information, to prevent information theft.
-> 3. Limit internet access to an allowlist of domains to reduce exposure to malicious content.
-> 4. Ask a human to confirm decisions that may result in meaningful real-world consequences as well as any tasks requiring affirmative consent, such as accepting cookies, executing financial transactions, or agreeing to terms of service.
->
-> In some circumstances, Claude will follow commands found in content even if it conflicts with the user's instructions. For example, instructions on webpages or contained in images may override user instructions or cause Claude to make mistakes. We suggest taking precautions to isolate Claude from sensitive data and actions to avoid risks related to prompt injection.
->
-> Finally, please inform end users of relevant risks and obtain their consent prior to enabling computer use in your own products.
-
-This repository helps you get started with computer use on Claude, with reference implementations of:
-
-- Build files to create a Docker container with all necessary dependencies
-- A computer use agent loop using the Claude API, Bedrock, or Vertex to access Claude Opus 4.5, Claude Sonnet 4.5, Claude Sonnet 4, Claude Opus 4, Claude Haiku 4.5, Claude 3.7 Sonnet, and Claude 3.5 Sonnet models
-- Anthropic-defined computer use tools
-- A streamlit app for interacting with the agent loop
-
-> [!TIP]
-> **Looking for production-readiness patterns?** This demo is a deliberately minimal, containerized reference: it shows the essential agent loop running against a Linux desktop in Docker with X11 + VNC. If you want to see common patterns for making computer-use agents more reliable and cost-effective — explicit tool definitions, image sizing and pruning, prompt caching, server-side compaction, batched tool calls, a sandboxed shell, and trajectory recording — see the [Computer Use Best Practices](../computer-use-best-practices) quickstart, which runs natively on macOS (no container) and pairs with Anthropic's [computer-use best-practices guide](https://claude.com/blog/best-practices-for-computer-and-browser-use-with-claude).
-
-Please use [this form](https://forms.gle/BT1hpBrqDPDUrCqo7) to provide feedback on the quality of the model responses, the API itself, or the quality of the documentation - we cannot wait to hear from you!
+> Webpages and images can contain prompt-injection text that changes the
+> agent's behavior. Inform users of these risks before enabling computer
+> control in another product.
 
 > [!IMPORTANT]
-> The Beta API used in this reference implementation is subject to change. Please refer to the [API release notes](https://docs.claude.com/en/release-notes/api) for the most up-to-date information.
+> The agent loop runs inside the same container it controls. The demo supports
+> one session at a time; restart or reset it between independent sessions when
+> necessary.
 
-> [!IMPORTANT]
-> The components are weakly separated: the agent loop runs in the container being controlled by Claude, can only be used by one session at a time, and must be restarted or reset between sessions if necessary.
+## Quick start
 
-## Tool versions
+### Prerequisites
 
-The demo supports every dated version of the Anthropic-defined computer use tools, selectable in the app's sidebar. The sidebar defaults to the version matching the selected model.
+- Docker
+- A Kimi Code API key from the [Kimi Code console](https://www.kimi.com/code/console)
 
-The most recent shape, `computer_toolset_20260801`, declares the computer tool as a *toolset*: a single nameless entry in `tools[]` that declares one member tool per computer action. The model then calls each action as its own tool — `tool_use.name` is the member name (`left_click`, `screenshot`, ...), the block carries `toolset_name: "computer"`, and the input is that action's parameters with no `action` discriminator. Every `tool_result` answering a member call carries the same `toolset_name`, member calls in a turn run sequentially and stop on the first failure, and the toolset requires no `anthropic-beta` header. Earlier dated versions of the tool (API types `computer_20241022` through `computer_20251124`, the sidebar's `computer_use_*` entries) keep the single `computer` tool with an `action` parameter and their respective beta headers. A model supports either the toolset or the earlier dated versions it was trained with — check the [computer use documentation](https://docs.claude.com/en/docs/agents-and-tools/computer-use) for each model's supported versions.
+### Build and run
 
-## Quickstart: running the Docker container
-
-### Kimi Code (custom-tool compatibility mode)
-
-This repository also supports Kimi Code through its Anthropic-compatible
-Messages endpoint. In Kimi mode the desktop tools are declared as ordinary
-custom tools instead of Claude's built-in computer-use tool types. Image
-input and tool calling must be available to the selected Kimi model and
-account. This is an experimental adaptation, not a guarantee of feature or
-behavioral parity with Claude computer use.
-
-Build the local image: the prebuilt Anthropic image does not include these
-changes. Set `ANTHROPIC_API_KEY` in your shell to a Kimi Code API key without
-committing it or putting it in the command history, then run:
+From this directory, build the local image:
 
 ```bash
-cd computer-use-demo
 docker build -t computer-use-demo:kimi .
+```
+
+Set your API key in the shell, then start the container:
+
+```bash
+export KIMI_API_KEY=%your_api_key%
 docker run --rm -it \
   -e API_PROVIDER=kimi \
-  -e ANTHROPIC_API_KEY \
-  -e ANTHROPIC_BASE_URL=https://api.kimi.com/coding/ \
+  -e KIMI_API_KEY \
+  -e KIMI_BASE_URL=https://api.kimi.com/coding/ \
   -p 127.0.0.1:8080:8080 \
   -p 127.0.0.1:8501:8501 \
   -p 127.0.0.1:6080:6080 \
+  -p 127.0.0.1:5900:5900 \
   computer-use-demo:kimi
 ```
 
-Open http://localhost:8080 and select the Kimi provider if it is not already
-selected. The default model is `kimi-for-coding`; model access depends on your
-Kimi Code membership. For the overseas endpoint use
-`https://api.kimi.ai/coding/` instead. See [Kimi's model configuration](https://www.kimi.com/code/docs/en/kimi-code/models)
-for current model and endpoint details.
+Open [http://localhost:8080](http://localhost:8080). The default provider is
+Kimi and the default model is `kimi-for-coding`.
 
-The container can execute commands and control its desktop. Use a disposable,
-minimally privileged environment, do not mount sensitive files or credentials,
-and review consequential actions. Screenshots and task content are sent to
-the model provider. Kimi Code is intended for programming scenarios; Kimi
-recommends its open platform for product integrations.
-
-### Claude API
-
-> [!TIP]
-> You can find your API key in the [Claude Console](https://console.anthropic.com/).
+For the overseas endpoint, set:
 
 ```bash
-export ANTHROPIC_API_KEY=%your_api_key%
-docker run \
-    -e ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY \
-    -v $HOME/.anthropic:/home/computeruse/.anthropic \
-    -p 5900:5900 \
-    -p 8501:8501 \
-    -p 6080:6080 \
-    -p 8080:8080 \
-    -it ghcr.io/anthropics/anthropic-quickstarts:computer-use-demo-latest
+KIMI_BASE_URL=https://api.kimi.ai/coding/
 ```
 
-Once the container is running, see the [Accessing the demo app](#accessing-the-demo-app) section below for instructions on how to connect to the interface.
+See [Kimi model configuration](https://www.kimi.com/code/docs/en/kimi-code/models)
+for current endpoint and account details. Kimi Code is intended for programming
+scenarios; use Kimi's open platform for general product integrations.
 
-### Bedrock
+## How it works
 
-> [!TIP]
-> To use the new Claude 3.7 Sonnet on Bedrock, you first need to [request model access](https://docs.aws.amazon.com/bedrock/latest/userguide/model-access-modify.html).
+Kimi Code is called through a Messages-compatible endpoint. The Python client
+library and some internal environment variable names retain compatibility names,
+but the default runtime sends requests to Kimi.
 
-You'll need to pass in AWS credentials with appropriate permissions to use Claude on Bedrock.
-You have a few options for authenticating with Bedrock. See the [boto3 documentation](https://boto3.amazonaws.com/v1/documentation/api/latest/guide/credentials.html#environment-variables) for more details and options.
+The app presents the computer, bash, and editor capabilities as ordinary custom
+tools. When Kimi requests an action, the agent loop runs it inside the container,
+captures the result or screenshot, and sends that result back to the model.
 
-#### Option 1: (suggested) Use the host's AWS credentials file and AWS profile
-
-```bash
-export AWS_PROFILE=<your_aws_profile>
-docker run \
-    -e API_PROVIDER=bedrock \
-    -e AWS_PROFILE=$AWS_PROFILE \
-    -e AWS_REGION=us-west-2 \
-    -v $HOME/.aws:/home/computeruse/.aws \
-    -v $HOME/.anthropic:/home/computeruse/.anthropic \
-    -p 5900:5900 \
-    -p 8501:8501 \
-    -p 6080:6080 \
-    -p 8080:8080 \
-    -it ghcr.io/anthropics/anthropic-quickstarts:computer-use-demo-latest
+```text
+User prompt
+    │
+    ▼
+Streamlit UI ──► Kimi Code API
+                    │
+                    ▼
+              custom tool call
+                    │
+                    ▼
+       Linux desktop / shell / editor
+                    │
+                    ▼
+          screenshot or tool result
 ```
 
-Once the container is running, see the [Accessing the demo app](#accessing-the-demo-app) section below for instructions on how to connect to the interface.
+This is a compatibility adaptation using custom tools. It does not depend on a
+provider-native computer-control tool type.
 
-#### Option 2: Use an access key and secret
+## Interfaces
 
-```bash
-export AWS_ACCESS_KEY_ID=%your_aws_access_key%
-export AWS_SECRET_ACCESS_KEY=%your_aws_secret_access_key%
-export AWS_SESSION_TOKEN=%your_aws_session_token%
-docker run \
-    -e API_PROVIDER=bedrock \
-    -e AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
-    -e AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
-    -e AWS_SESSION_TOKEN=$AWS_SESSION_TOKEN \
-    -e AWS_REGION=us-west-2 \
-    -v $HOME/.anthropic:/home/computeruse/.anthropic \
-    -p 5900:5900 \
-    -p 8501:8501 \
-    -p 6080:6080 \
-    -p 8080:8080 \
-    -it ghcr.io/anthropics/anthropic-quickstarts:computer-use-demo-latest
-```
-
-Once the container is running, see the [Accessing the demo app](#accessing-the-demo-app) section below for instructions on how to connect to the interface.
-
-### Vertex
-
-You'll need to pass in Google Cloud credentials with appropriate permissions to use Claude on Vertex.
-
-```bash
-docker build . -t computer-use-demo
-gcloud auth application-default login
-export VERTEX_REGION=%your_vertex_region%
-export VERTEX_PROJECT_ID=%your_vertex_project_id%
-docker run \
-    -e API_PROVIDER=vertex \
-    -e CLOUD_ML_REGION=$VERTEX_REGION \
-    -e ANTHROPIC_VERTEX_PROJECT_ID=$VERTEX_PROJECT_ID \
-    -v $HOME/.config/gcloud/application_default_credentials.json:/home/computeruse/.config/gcloud/application_default_credentials.json \
-    -p 5900:5900 \
-    -p 8501:8501 \
-    -p 6080:6080 \
-    -p 8080:8080 \
-    -it computer-use-demo
-```
-
-Once the container is running, see the [Accessing the demo app](#accessing-the-demo-app) section below for instructions on how to connect to the interface.
-
-This example shows how to use the Google Cloud Application Default Credentials to authenticate with Vertex.
-You can also set `GOOGLE_APPLICATION_CREDENTIALS` to use an arbitrary credential file, see the [Google Cloud Authentication documentation](https://cloud.google.com/docs/authentication/application-default-credentials#GAC) for more details.
-
-### Accessing the demo app
-
-Once the container is running, open your browser to [http://localhost:8080](http://localhost:8080) to access the combined interface that includes both the agent chat and desktop view.
-
-The container stores settings like the API key and custom system prompt in `~/.anthropic/`. Mount this directory to persist these settings between container runs.
-
-Alternative access points:
-
-- Streamlit interface only: [http://localhost:8501](http://localhost:8501)
-- Desktop view only: [http://localhost:6080/vnc.html](http://localhost:6080/vnc.html)
-- Direct VNC connection: `vnc://localhost:5900` (for VNC clients)
+- Combined chat and desktop: [http://localhost:8080](http://localhost:8080)
+- Streamlit chat only: [http://localhost:8501](http://localhost:8501)
+- noVNC desktop only: [http://localhost:6080/vnc.html](http://localhost:6080/vnc.html)
+- Direct VNC connection: `vnc://localhost:5900`
 
 ## Screen size
 
-Environment variables `WIDTH` and `HEIGHT` can be used to set the screen size. For example:
+Use the `WIDTH` and `HEIGHT` environment variables to configure the virtual
+desktop. The default is 1024x768. For example:
 
 ```bash
-docker run \
-    -e ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY \
-    -v $HOME/.anthropic:/home/computeruse/.anthropic \
-    -p 5900:5900 \
-    -p 8501:8501 \
-    -p 6080:6080 \
-    -p 8080:8080 \
-    -e WIDTH=1920 \
-    -e HEIGHT=1080 \
-    -it ghcr.io/anthropics/anthropic-quickstarts:computer-use-demo-latest
+docker run --rm -it \
+  -e API_PROVIDER=kimi \
+  -e KIMI_API_KEY \
+  -e KIMI_BASE_URL=https://api.kimi.com/coding/ \
+  -e WIDTH=1280 \
+  -e HEIGHT=800 \
+  -p 127.0.0.1:8080:8080 \
+  computer-use-demo:kimi
 ```
 
-We do not recommend sending screenshots in resolutions above [XGA/WXGA](https://en.wikipedia.org/wiki/Display_resolution_standards#XGA) to avoid issues related to [image resizing](https://docs.claude.com/en/docs/build-with-claude/vision#evaluate-image-size).
-Relying on the image resizing behavior in the API will result in lower model accuracy and slower performance than implementing scaling in your tools directly. The `computer` tool implementation in this project demonstrates how to scale both images and coordinates from higher resolutions to the suggested resolutions.
-
-When implementing computer use yourself, we recommend using XGA resolution (1024x768):
-
-- For higher resolutions: Scale the image down to XGA and let the model interact with this scaled version, then map the coordinates back to the original resolution proportionally.
-- For lower resolutions or smaller devices (e.g. mobile devices): Add black padding around the display area until it reaches 1024x768.
+Large screenshots increase latency and may reduce coordinate accuracy. The
+computer tool scales screenshots and coordinates when the configured desktop
+is larger than its model-facing reference size.
 
 ## Development
 
+Set up the Python environment and hooks:
+
 ```bash
-./setup.sh  # configure venv, install development dependencies, and install pre-commit hooks
-docker build . -t computer-use-demo:local  # manually build the docker image (optional)
-export ANTHROPIC_API_KEY=%your_api_key%
-docker run \
-    -e ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY \
-    -v $(pwd)/computer_use_demo:/home/computeruse/computer_use_demo/ `# mount local python module for development` \
-    -v $HOME/.anthropic:/home/computeruse/.anthropic \
-    -p 5900:5900 \
-    -p 8501:8501 \
-    -p 6080:6080 \
-    -p 8080:8080 \
-    -it computer-use-demo:local  # can also use ghcr.io/anthropics/anthropic-quickstarts:computer-use-demo-latest
+./setup.sh
 ```
 
-The docker run command above mounts the repo inside the docker image, such that you can edit files from the host. Streamlit is already configured with auto reloading.
+To run local source code inside the container with Streamlit auto-reloading:
+
+```bash
+docker build . -t computer-use-demo:local
+export KIMI_API_KEY=%your_api_key%
+docker run --rm -it \
+  -e API_PROVIDER=kimi \
+  -e KIMI_API_KEY \
+  -e KIMI_BASE_URL=https://api.kimi.com/coding/ \
+  -v $(pwd)/computer_use_demo:/home/computeruse/computer_use_demo/ \
+  -p 127.0.0.1:5900:5900 \
+  -p 127.0.0.1:8501:8501 \
+  -p 127.0.0.1:6080:6080 \
+  -p 127.0.0.1:8080:8080 \
+  computer-use-demo:local
+```
+
+## Troubleshooting
+
+If authentication fails, verify that `KIMI_API_KEY` is present in the shell
+that launches Docker. If requests target the wrong endpoint, check
+`KIMI_BASE_URL` and restart the container.
+
+If the desktop is blank, open the noVNC URL directly and confirm that ports
+6080 and 8080 are available. If actions land at the wrong coordinates, return
+to the default 1024x768 screen size before testing custom dimensions.

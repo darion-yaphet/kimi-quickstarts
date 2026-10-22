@@ -153,6 +153,7 @@
       let profiles = new Map();
       let activeSession = null;
       let sandboxAvailable = false;
+      let demoMode = false;
 
       async function request(path, options = {}) {
         const response = await fetch(path, options);
@@ -407,6 +408,7 @@
         return card;
       }
       async function loadSandboxJobs() {
+        if (demoMode) return;
         const payload = await request('/v1/sandbox/jobs');
         const output = $('#sandbox-jobs');
         output.replaceChildren();
@@ -441,8 +443,17 @@
       });
       async function loadCapabilities() {
         const capabilities = await request('/v1/capabilities');
+        demoMode = capabilities.mode === 'demo';
+        if (demoMode) {
+          document.querySelector('header h1').textContent = 'Kimi Quickstarts · Offline Demo';
+          document.querySelector('header p').textContent = '离线演示：回复为固定模拟内容，无需 API 密钥。会话、文档检索和定时任务保存在本地；不连接外部服务，不执行 Python。';
+          document.querySelector('#knowledge-panel p').textContent = '演示模式下，文档在本地索引和检索，不发送给模型服务。';
+        }
         sandboxAvailable = Boolean(capabilities.sandbox && capabilities.sandbox.available);
         $('#sandbox-submit').disabled = !sandboxAvailable;
+        $('#sandbox-refresh').disabled = demoMode;
+        $('#sandbox-recover').disabled = demoMode;
+        $('#sandbox-code').disabled = demoMode;
         $('#sandbox-capability').textContent = sandboxAvailable
           ? `Ready: ${capabilities.sandbox.image || 'local Docker image'}; host execution is disabled.`
           : `Unavailable: ${(capabilities.sandbox && capabilities.sandbox.reason) || 'sandbox backend is not ready'}. Host execution is disabled.`;
@@ -458,7 +469,8 @@
       (async () => {
         try {
           await loadProfiles();
-          await Promise.all([loadSessions(), loadCapabilities(), listKnowledge(), loadSchedules(), loadSandboxJobs()]);
+          await loadCapabilities();
+          await Promise.all([loadSessions(), listKnowledge(), loadSchedules(), loadSandboxJobs()]);
         } catch (error) { setNotice(error.message); }
       })();
     </script>

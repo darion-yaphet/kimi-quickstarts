@@ -1,11 +1,11 @@
 <project_specification>
-  <project_name>Claude.ai Clone - AI Chat Interface</project_name>
+  <project_name>Kimi AI Chat Interface</project_name>
 
   <overview>
-    Build a fully functional clone of claude.ai, Anthropic's conversational AI interface. The application should
-    provide a clean, modern chat interface for interacting with Claude via the API, including features like
+    Build a conversational AI application using Kimi. The application should
+    provide a clean, modern chat interface for interacting with Kimi via the API, including features like
     conversation management, artifact rendering, project organization, multiple model selection, and advanced
-    settings. The UI should closely match claude.ai's design using Tailwind CSS with a focus on excellent
+    settings. The UI should use a clean design with Tailwind CSS with a focus on excellent
     user experience and responsive design.
   </overview>
 
@@ -25,19 +25,19 @@
     <backend>
       <runtime>Node.js with Express</runtime>
       <database>SQLite with better-sqlite3</database>
-      <api_integration>Claude API for chat completions</api_integration>
+      <api_integration>Kimi API for chat completions</api_integration>
       <streaming>Server-Sent Events for streaming responses</streaming>
     </backend>
     <communication>
       <api>RESTful endpoints</api>
       <streaming>SSE for real-time message streaming</streaming>
-      <claude_api>Integration with Claude API using Anthropic SDK</claude_api>
+      <kimi_api>Integration with the Kimi Anthropic-compatible API using the Anthropic SDK</kimi_api>
     </communication>
   </technology_stack>
 
   <prerequisites>
     <environment_setup>
-      - Repository includes .env with VITE_ANTHROPIC_API_KEY configured
+      - Configure KIMI_API_KEY and KIMI_BASE_URL on the server; never expose the key to the frontend
       - Frontend dependencies pre-installed via pnpm
       - Backend code goes in /server directory
       - Install backend dependencies as needed
@@ -101,12 +101,10 @@
 
     <model_selection>
       - Model selector dropdown with the following models:
-        - Claude Sonnet 4.5 (claude-sonnet-4-5-20250929) - default
-        - Claude Haiku 4.5 (claude-haiku-4-5-20251001)
-        - Claude Opus 4.1 (claude-opus-4-1-20250805)
+        - Kimi for Coding (kimi-for-coding) - default
       - Model capabilities display
       - Context window indicator
-      - Model-specific pricing info (display only)
+      - Model details based on configured service information
       - Switch models mid-conversation
       - Model comparison view
     </model_selection>
@@ -371,12 +369,12 @@
       - PUT /api/settings/custom-instructions
     </settings>
 
-    <claude_api>
-      - POST /api/claude/chat (proxy to Claude API)
-      - POST /api/claude/chat/stream (streaming proxy)
-      - GET /api/claude/models
-      - POST /api/claude/images/upload
-    </claude_api>
+    <kimi_api>
+      - POST /api/kimi/chat (proxy to Kimi API)
+      - POST /api/kimi/chat/stream (streaming proxy)
+      - GET /api/kimi/models
+      - POST /api/kimi/images/upload
+    </kimi_api>
   </api_endpoints_summary>
 
   <ui_layout>
@@ -434,7 +432,7 @@
 
   <design_system>
     <color_palette>
-      - Primary: Orange/amber accent (#CC785C claude-style)
+      - Primary: Orange/amber accent (#CC785C)
       - Background: White (light mode), Dark gray (#1A1A1A dark mode)
       - Surface: Light gray (#F5F5F5 light), Darker gray (#2A2A2A dark)
       - Text: Near black (#1A1A1A light), Off-white (#E5E5E5 dark)
@@ -511,7 +509,7 @@
       2. Artifact panel slides in from right
       3. Content renders (code with highlighting or live preview)
       4. User can edit artifact inline
-      5. "Re-prompt" button to iterate with Claude
+      5. "Re-prompt" button to iterate with Kimi
       6. Download or copy artifact content
       7. Full-screen mode for detailed work
       8. Close panel to return to chat focus
@@ -534,7 +532,7 @@
       <title>Setup Project Foundation and Database</title>
       <tasks>
         - Initialize Express server with SQLite database
-        - Set up Claude API client with streaming support
+        - Set up Kimi API client with streaming support
         - Create database schema with migrations
         - Implement authentication endpoints
         - Set up basic CORS and middleware
@@ -571,7 +569,7 @@
     <step number="4">
       <title>Artifacts System</title>
       <tasks>
-        - Build artifact detection from Claude responses
+        - Build artifact detection from Kimi responses
         - Create artifact rendering panel
         - Implement code artifact viewer
         - Add HTML/SVG live preview
@@ -652,7 +650,7 @@
     </functionality>
 
     <user_experience>
-      - Interface matches claude.ai design language
+      - Interface matches a consistent design language
       - Responsive on all device sizes
       - Smooth animations and transitions
       - Fast response times and minimal lag
@@ -670,7 +668,7 @@
     </technical_quality>
 
     <design_polish>
-      - Consistent with claude.ai visual design
+      - Consistent with the application visual design
       - Beautiful typography and spacing
       - Smooth animations and micro-interactions
       - Excellent contrast and accessibility

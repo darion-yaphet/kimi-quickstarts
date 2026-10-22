@@ -9,7 +9,7 @@ this clone.
 
 | Directory | Kimi implementation | Validation / remaining limits |
 | --- | --- | --- |
-| `customer-support-agent` | Configurable Kimi Messages client, Kimi model UI, full JSON replies without Claude assistant prefill, optional Bedrock retrieval | Next.js build passed; real `/api/chat` call returned HTTP 200 and validated response fields. Bedrock needs separate AWS setup. |
+| `customer-support-agent` | Kimi Messages client, Kimi model UI, and local file-based knowledge retrieval | Next.js build and local retrieval checks passed; the latest retrieval change has not been tested with a live model call. |
 | `financial-data-analyst` | Kimi Messages and ordinary chart tools; Kimi model picker | Next.js build and lint passed. |
 | `agents` | Kimi Messages defaults, optional caching off, ordinary tools | Configuration and tool tests pass. Code execution requires a local Docker runtime/image; web search requires an explicit backend. |
 | `autonomous-coding` | Claude Agent SDK forwarded to Kimi with endpoint and all task-tier models configured | Configuration and 89 security checks pass. A real Claude CLI request routed through Kimi returned `OK`; a full application-building run has not been performed. |

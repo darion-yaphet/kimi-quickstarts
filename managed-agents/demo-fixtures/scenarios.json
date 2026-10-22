@@ -1,0 +1,13 @@
+[
+  {"profile":"assistant-ui","title":"表格分析示例","message":"请整理示例产品一季度收入：一月、二月、三月各是多少？"},
+  {"profile":"chat-sdk","title":"研究对话示例","message":"根据本地发布记录整理本周新增功能，不进行联网搜索。"},
+  {"profile":"copilot-kit-ag-ui","title":"财务助手示例","message":"请列出虚构示例的一季度收入，作为财务界面的输入素材。"},
+  {"profile":"daily-brief","title":"每日简报示例","message":"根据示例产品的发布记录和故障记录生成简报素材。"},
+  {"profile":"knowledge-wiki","title":"知识问答示例","message":"星河笔记的退款期限是多少天？请附上来源。"},
+  {"profile":"linear","title":"模拟 Linear 工单","message":"[模拟 Linear 工单 DEMO-001] 文件上传超时，三位测试用户受影响。请根据故障记录起草回复。"},
+  {"profile":"mcp-server-typescript","title":"本地会话工具示例","message":"请提供退款期限的示例答复，随后由本地程序列出会话和回放消息。"},
+  {"profile":"roadtrip-planner","title":"旅行草稿示例","message":"请列出本地素材中的两天旅行行程，并指出实时地图和天气信息缺失。"},
+  {"profile":"self-hosted-sandboxes","title":"执行边界示例","message":"演示 Python 任务：print(1 + 1)。离线模式只保存请求，不执行代码。"},
+  {"profile":"sentry","title":"模拟 Sentry 事件","message":"[模拟 Sentry 事件 DEMO-001] TimeoutError，上传请求超时。请列出本地故障记录以便人工排查。"},
+  {"profile":"slack","title":"模拟 Slack 线程","message":"[模拟 Slack #support / thread-demo-001] 用户询问星河笔记退款期限。请起草答复，仅输出到本地。"}
+]

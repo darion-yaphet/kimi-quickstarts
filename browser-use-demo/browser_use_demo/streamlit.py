@@ -1,6 +1,4 @@
-"""
-Browser Use Demo - Streamlit interface for browser automation with Claude
-"""
+"""Browser Use Demo - Streamlit interface for browser automation."""
 
 import asyncio
 import base64

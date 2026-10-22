@@ -417,7 +417,7 @@ class BrowserTool(BaseAnthropicTool):
         """
         Apply auto-scaling to coordinates using the CoordinateScaler.
 
-        Claude's vision model interprets images at a different resolution than actual.
+        The model may interpret images at a different resolution than the viewport.
         We use empirically-derived base resolution for accurate coordinate mapping.
 
         Args:
@@ -838,7 +838,7 @@ class BrowserTool(BaseAnthropicTool):
             content_length = len(full_content)
             # Estimate token count
             # Note: For exact counts, use client.beta.messages.count_tokens API
-            # This estimate uses ~3.5 chars/token which is typical for Claude with English text
+            # This estimate uses ~3.5 chars/token for typical English text
             # Actual ratio varies by content type (code, languages, special characters)
             estimated_tokens = int(content_length / 3.5)
 
@@ -882,7 +882,7 @@ Source element: <{result.get("source", "unknown")}>
             content_length = len(full_content)
             # Estimate token count
             # Note: For exact counts, use client.beta.messages.count_tokens API
-            # This estimate uses ~3.5 chars/token which is typical for Claude with English text
+            # This estimate uses ~3.5 chars/token for typical English text
             # Actual ratio varies by content type (code, languages, special characters)
             estimated_tokens = int(content_length / 3.5)
 

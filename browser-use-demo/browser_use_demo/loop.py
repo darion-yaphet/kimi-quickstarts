@@ -1,6 +1,4 @@
-"""
-Sampling loop for browser automation with Claude
-"""
+"""Sampling loop for model-driven browser automation."""
 
 from collections.abc import Callable
 from datetime import datetime

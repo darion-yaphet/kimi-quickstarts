@@ -5,11 +5,11 @@ Anthropic-compatible Messages API. Browser actions remain ordinary custom
 tools and screenshots remain standard image content blocks.
 
 > [!TIP]
-> **Looking for production-readiness patterns?** This demo is a deliberately minimal, containerized reference focused on browser-only (DOM) automation in Docker. If you want to see common patterns for making computer- and browser-use agents more reliable and cost-effective — explicit tool definitions, image sizing and pruning, prompt caching, server-side compaction, batched tool calls, a sandboxed shell, and trajectory recording — see the [Computer Use Best Practices](../computer-use-best-practices) quickstart, which runs a full GUI agent (screenshot-and-click plus a Playwright browser tool) natively on macOS and pairs with Anthropic's [computer-use best-practices guide](https://claude.com/blog/best-practices-for-computer-and-browser-use-with-claude).
+> This is a deliberately minimal, containerized reference focused on browser-only DOM automation. For a full GUI agent that can also operate desktop applications, see the [computer use demo](../computer-use-demo).
 
 ## Overview
 
-This demo implements a custom browser tool that enables Claude to interact with web browsers. It provides:
+This demo implements a custom browser tool that enables Kimi Code to interact with web browsers. It provides:
 
 - **DOM access**: Read page structure with element references
 - **Navigation control**: Browse URLs and manage browser history
@@ -79,11 +79,11 @@ https://github.com/user-attachments/assets/4fb72078-6902-4b63-bcd1-5f2c4cd60582
 Once the demo is running, try these prompts in the Streamlit interface:
 
 - "Navigate to news.ycombinator.com and tell me the top 3 stories"
-- "Go to google.com and search for 'Anthropic Claude'"
+- "Go to google.com and search for 'Kimi Code'"
 - "Visit wikipedia.org and find information about artificial intelligence"
 - "Navigate to github.com and search for 'playwright'"
 
-Note that the current Playwright implementation hits CAPTCHAs when searching Google.com. To avoid this, we recommend that you specify the website in the prompt (ie. navigate to Anthropic.com and search for x).
+The current Playwright implementation may encounter CAPTCHAs on search engines. When that happens, ask the agent to navigate directly to a specific website and search within that site.
 
 ## Safety Considerations
 
@@ -94,7 +94,7 @@ Browser automation poses unique risks that are distinct from standard API featur
 3. Consider an allowlist of domains to reduce exposure to malicious content.
 4. Ask a human to confirm decisions that may result in meaningful real-world consequences as well as any tasks requiring affirmative consent, such as accepting cookies, executing financial transactions, or agreeing to terms of service.
 
-In some circumstances, Claude will follow commands found in content even if it conflicts with the user's instructions. For example, instructions on webpages or contained in images may override user instructions or cause Claude to make mistakes. We suggest taking precautions to isolate Claude from sensitive data and actions to avoid risks related to prompt injection.
+In some circumstances, the model may follow commands found in page content even when they conflict with the user's instructions. Webpages or images can contain prompt-injection text that changes the agent's behavior. Isolate the agent from sensitive data and actions, and review consequential operations.
 
 Finally, please inform end users of relevant risks and obtain their consent prior to enabling browser automation in your own products.
 
@@ -106,7 +106,7 @@ This demo runs a browser in a containerized environment. While isolated, please 
 
 ## Implementation Reference
 
-This demo shows how to build browser automation with Claude using Playwright. All browser actions (navigate, click, type, scroll, form_input, etc.) are implemented as methods in [browser.py](browser_use_demo/tools/browser.py) using Playwright's async API.
+This demo shows how to build browser automation with Kimi Code and Playwright. All browser actions (navigate, click, type, scroll, form_input, etc.) are implemented as methods in [browser.py](browser_use_demo/tools/browser.py) using Playwright's async API.
 
 ### Key Files
 
@@ -137,8 +137,8 @@ The browser tools implementation includes automatic coordinate scaling to ensure
 
 **How it works:**
 - The browser viewport is fixed at 1920x1080 (16:9 aspect ratio)
-- Claude processes screenshots at 1456x819 pixels for 16:9 aspect ratio (see [documentation](https://docs.claude.com/en/docs/build-with-claude/vision#evaluate-image-size))
-- The browser tool automatically scales coordinates from Claude's processed resolution (1456x819) to the actual viewport (1920x1080)
+- The implementation uses a 1456x819 model-facing reference resolution for 16:9 screenshots
+- The browser tool automatically scales coordinates from that reference resolution to the actual viewport (1920x1080)
 - This ensures clicks and interactions happen at the correct locations
 
 See `browser_use_demo/tools/coordinate_scaling.py` for the implementation.
@@ -168,7 +168,7 @@ This demo uses a custom tool definition with an explicit input schema, giving yo
 │  └──────────┬──────────────────┘ │
 │             │                     │
 │  ┌──────────▼──────────────────┐ │
-│  │  Claude API + Browser Tool  │ │  ← Claude controls browser
+│  │   Kimi API + Browser Tool   │ │  ← Kimi controls browser
 │  └──────────┬──────────────────┘ │
 │             │                     │
 │  ┌──────────▼──────────────────┐ │

@@ -8,6 +8,13 @@ adapters are migrated.
 
 ## Local Kimi migration
 
+For a runnable example without API keys, cloud accounts, Docker, or extra Python
+packages, run `python3 kimi.py demo` from this directory. It exercises all eleven
+profiles with local fixtures, real SQLite sessions, retrieval and scheduling,
+and clearly marked simulated replies. Run `python3 kimi.py --demo --serve` for
+the browser version. See [SIMULATION.md](SIMULATION.md) for the replacement
+matrix, result files and limitations.
+
 Kimi Code provides an Anthropic-compatible **Messages API**, but it does not
 host Claude Managed Agents resources. Pointing the examples below at a Kimi
 Base URL does not provide `beta.agents`, `beta.sessions`, vaults, dreams, cron,

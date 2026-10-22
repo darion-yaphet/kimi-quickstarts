@@ -18,6 +18,7 @@ from kimi_local.scheduler import Scheduler
 
 
 DEFAULT_DB = Path(__file__).parent / ".kimi" / "sessions.db"
+DEMO_DB = Path(__file__).parent / ".kimi" / "demo.db"
 
 
 def parser() -> argparse.ArgumentParser:
@@ -25,8 +26,10 @@ def parser() -> argparse.ArgumentParser:
         description="Local Kimi session service for the managed-agents examples"
     )
     result.add_argument("--profile", choices=sorted(PROFILES), default="assistant-ui")
+    result.add_argument("--db", help="SQLite database path")
     result.add_argument(
-        "--db", default=os.environ.get("KIMI_SESSIONS_DB", str(DEFAULT_DB))
+        "--demo", action="store_true",
+        help="Use offline sample replies; no model service or Docker execution",
     )
     result.add_argument("--session", help="Resume an existing local session")
     result.add_argument("--message", help="Send one message and exit")
@@ -53,6 +56,11 @@ def parser() -> argparse.ArgumentParser:
     )
     result.add_argument("--list-profiles", action="store_true")
     commands = result.add_subparsers(dest="command")
+    demo = commands.add_parser("demo", help="Run all local offline example scenarios")
+    demo.add_argument(
+        "--output", default=str(Path(__file__).parent / ".kimi" / "demo-results.json"),
+        help="Write simulated connector replies and workflow results as JSON",
+    )
     knowledge = commands.add_parser(
         "knowledge", help="Ingest and search local documents"
     )
@@ -99,12 +107,14 @@ def parser() -> argparse.ArgumentParser:
     return result
 
 
-def _runtime(database: str) -> LocalRuntime:
+def _runtime(database: str, *, demo: bool = False) -> LocalRuntime:
+    from kimi_local.demo_provider import DemoProvider
+
     runtime = LocalRuntime(
         SessionStore(database),
-        KimiProvider,
+        DemoProvider if demo else KimiProvider,
         knowledge=KnowledgeStore(database),
-        sandbox=SandboxExecutor(
+        sandbox=None if demo else SandboxExecutor(
             database,
             image=os.environ.get("KIMI_SANDBOX_IMAGE", "python:3.12-alpine"),
             timeout_seconds=float(os.environ.get("KIMI_SANDBOX_TIMEOUT", "10")),
@@ -129,7 +139,7 @@ def _session(runtime: LocalRuntime, args) -> dict:
 def worker(runtime, stop, poll_seconds, schedules=True):
     next_recovery = 0.0
     while not stop.is_set():
-        if time.monotonic() >= next_recovery:
+        if runtime.sandbox is not None and time.monotonic() >= next_recovery:
             try:
                 runtime.sandbox.recover_orphans()
             except Exception as error:
@@ -172,6 +182,8 @@ def feature_command(runtime, args):
             return runtime.scheduler.run_due()
         return runtime.scheduler.set_enabled(args.job_id, args.action == "enable")
     if args.command == "sandbox":
+        if runtime.sandbox is None:
+            raise ValueError("Python execution is disabled in offline demo mode")
         if args.action == "recover":
             return runtime.sandbox.recover_orphans()
         if args.action == "capabilities":
@@ -235,7 +247,17 @@ def main(argv=None) -> int:
         print(json.dumps(get_profile(args.profile).public_dict(), indent=2))
         return 0
 
-    runtime = _runtime(args.db)
+    demo = args.demo or args.command == "demo"
+    database = args.db or (
+        str(DEMO_DB) if demo else os.environ.get("KIMI_SESSIONS_DB", str(DEFAULT_DB))
+    )
+    runtime = _runtime(database, demo=demo)
+    if args.command == "demo":
+        from kimi_local.demo_workflows import run_demo
+
+        outcome = run_demo(runtime, Path(args.output))
+        print(json.dumps(outcome, ensure_ascii=False, indent=2))
+        return 0
     if not 0.1 <= args.poll_seconds <= 60:
         raise SystemExit("--poll-seconds must be between 0.1 and 60")
     if args.command == "worker":
@@ -264,9 +286,8 @@ def main(argv=None) -> int:
             raise SystemExit("The local runtime only supports loopback binding.")
         server = make_server(runtime, args.host, args.port)
         print(f"Local Kimi session API: http://{args.host}:{server.server_port}")
-        print(
-            "Local knowledge, persisted scheduling and Docker execution are available through /v1/."
-        )
+        print("OFFLINE DEMO: sample replies, no external calls or code execution."
+              if demo else "Local knowledge, scheduling and Docker execution: /v1/.")
         stop = threading.Event()
         background = None
         background = threading.Thread(

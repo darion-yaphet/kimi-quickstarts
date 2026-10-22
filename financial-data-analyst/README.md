@@ -11,7 +11,7 @@ A Next.js application that combines Kimi Code with interactive data visualizatio
   - Text/Code files (.txt, .md, .html, .py, .csv, etc)
   - PDF documents (Regular PDF with text, scanned documents not supported)
   - Images
-- **Interactive Data Visualization**: Based on the context and data analyzed, Claude can generate the following charts:
+- **Interactive Data Visualization**: Based on the context and data analyzed, Kimi can generate the following charts:
   - Line Charts (Time series data & trends)
   - Bar Charts (Single metric comparisons)
   - Multi-Bar Charts (Multiple metrics comparison)

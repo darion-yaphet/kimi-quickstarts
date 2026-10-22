@@ -59,6 +59,7 @@ class LocalRuntime:
 
     def capabilities(self) -> dict:
         return {
+            "mode": getattr(self.provider_factory, "mode", "kimi"),
             "knowledge": self.knowledge is not None,
             "scheduler": self.scheduler is not None,
             "sandbox": self.sandbox.check_backend()

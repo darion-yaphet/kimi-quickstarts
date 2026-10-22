@@ -547,7 +547,7 @@ export default function AIChat() {
                         Financial Assistant
                       </CardTitle>
                       <CardDescription className="text-xs">
-                        Powered by Claude
+                        Powered by Kimi
                       </CardDescription>
                     </div>
                   </>

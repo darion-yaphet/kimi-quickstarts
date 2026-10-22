@@ -18,7 +18,6 @@ import {
 import "highlight.js/styles/atom-one-dark.css";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import Image from "next/image";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -688,15 +687,7 @@ function ChatArea() {
             rows={1}
           />
           <div className="flex justify-between items-center p-3">
-            <div>
-              <Image
-                src="/claude-icon.svg"
-                alt="Assistant Icon"
-                width={0}
-                height={14}
-                className="w-auto h-[14px] mt-1"
-              />
-            </div>
+            <span className="text-xs text-muted-foreground">Powered by Kimi</span>
             <Button
               type="submit"
               disabled={isLoading || input.trim() === ""}

@@ -1,13 +1,13 @@
 """
 Coordinate scaling utilities for browser tool.
 
-This module handles the scaling of coordinates from Claude's vision model
-resolution to the actual browser viewport resolution.
+This module handles scaling from model image coordinates to the actual browser
+viewport resolution.
 """
 
 
 class CoordinateScaler:
-    """Handles coordinate scaling between Claude's vision and actual viewport."""
+    """Handles coordinate scaling between model input and the actual viewport."""
 
     # Claude's image processing resolution for 16:9 aspect ratio
     # According to the official documentation:
@@ -63,8 +63,7 @@ class CoordinateScaler:
         raise ValueError(
             f"Viewport aspect ratio {viewport_ratio:.3f} ({viewport_width}x{viewport_height}) "
             f"does not match any documented aspect ratios. "
-            f"Supported ratios: {', '.join(supported_ratios)}. "
-            f"See https://docs.claude.com/en/docs/build-with-claude/vision#evaluate-image-size"
+            f"Supported ratios: {', '.join(supported_ratios)}."
         )
 
     @classmethod
@@ -75,7 +74,7 @@ class CoordinateScaler:
         match_aspect_ratio: bool = False
     ) -> tuple[float, float]:
         """
-        Calculate scale factors for converting Claude coordinates to viewport coordinates.
+        Calculate scale factors for converting model coordinates to viewport coordinates.
 
         Args:
             viewport_width: Actual browser viewport width
@@ -113,11 +112,11 @@ class CoordinateScaler:
         apply_threshold: bool = True
     ) -> tuple[int, int]:
         """
-        Scale coordinates from Claude's vision to actual viewport.
+        Scale model image coordinates to the actual viewport.
 
         Args:
-            x: X coordinate from Claude
-            y: Y coordinate from Claude
+            x: X coordinate from the model
+            y: Y coordinate from the model
             viewport_width: Actual browser viewport width
             viewport_height: Actual browser viewport height
             apply_threshold: Whether to check if coordinates need scaling
@@ -132,12 +131,12 @@ class CoordinateScaler:
             return x, y
 
         if apply_threshold:
-            # Check if coordinates appear to be in Claude's resolution
+            # Check if coordinates appear to be in the model input resolution
             # (with 20% margin for edge cases)
             max_expected_x = cls.CLAUDE_ACTUAL_WIDTH * 1.2
             max_expected_y = cls.CLAUDE_ACTUAL_HEIGHT * 1.2
 
-            # If coordinates are larger than expected Claude resolution,
+            # If coordinates are larger than the expected model input resolution,
             # they might already be in viewport coordinates
             if x > max_expected_x or y > max_expected_y:
                 return x, y
