@@ -110,10 +110,13 @@ async def sampling_loop(
     thinking_effort: ThinkingEffort = "medium",
     thinking_budget: int | None = None,
     token_efficient_tools_beta: bool = False,
+    max_tool_turns: int = 30,
 ):
     """
     Agentic sampling loop for the assistant/tool interaction of computer use.
     """
+    if isinstance(max_tool_turns, bool) or not isinstance(max_tool_turns, int) or max_tool_turns < 1:
+        raise ValueError("max_tool_turns must be a positive integer")
     tool_group = TOOL_GROUPS_BY_VERSION[tool_version]
     tool_collection = ToolCollection(*(ToolCls() for ToolCls in tool_group.tools))
     system = BetaTextBlockParam(
@@ -121,7 +124,7 @@ async def sampling_loop(
         text=f"{SYSTEM_PROMPT}{' ' + system_prompt_suffix if system_prompt_suffix else ''}",
     )
 
-    while True:
+    for _ in range(max_tool_turns):
         enable_prompt_caching = False
         betas = [tool_group.beta_flag] if tool_group.beta_flag else []
         if token_efficient_tools_beta:
@@ -298,6 +301,13 @@ async def sampling_loop(
             return messages
 
         messages.append({"content": tool_result_content, "role": "user"})
+
+    api_response_callback(
+        raw_response.http_response.request,
+        raw_response.http_response,
+        RuntimeError(f"Model reached the tool turn limit ({max_tool_turns}); no further actions were executed."),
+    )
+    return messages
 
 
 def _to_kimi_tool_params(

@@ -1,6 +1,7 @@
 from typing import Any, cast
 from unittest import mock
 
+import pytest
 from anthropic import omit
 from anthropic.types import TextBlock, ToolUseBlock
 from anthropic.types.beta import (
@@ -35,6 +36,31 @@ async def test_truncated_response_never_executes_partial_tools():
     tools.run.assert_not_awaited()
     assert result == [{"role": "user", "content": "Inspect"}]
     assert "max_tokens" in str(callback.call_args.args[2])
+
+
+async def test_tool_loop_stops_at_budget_with_complete_tool_results():
+    client = mock.Mock()
+    raw = client.messages.with_raw_response.create.return_value
+    raw.parse.side_effect = [
+        mock.Mock(content=[ToolUseBlock(type="tool_use", id="step", name="computer", input={"action": "screenshot"})], stop_reason="tool_use"),
+        mock.Mock(content=[TextBlock(type="text", text="Done")], stop_reason="end_turn"),
+    ]
+    tools = mock.Mock()
+    tools.to_params.return_value = [{"name": "computer", "type": "computer_20250124"}]
+    tools.run = mock.AsyncMock(return_value=mock.Mock(output="result", error=None, base64_image=None))
+    callback = mock.Mock()
+    with mock.patch("computer_use_demo.loop.Anthropic", return_value=client), mock.patch("computer_use_demo.loop.ToolCollection", return_value=tools):
+        result = await sampling_loop(model="test", provider=APIProvider.KIMI, system_prompt_suffix="", messages=[{"role": "user", "content": "Inspect"}], output_callback=mock.Mock(), tool_output_callback=mock.Mock(), api_response_callback=callback, api_key="test", tool_version="computer_use_20250124", max_tool_turns=1)
+    assert client.messages.with_raw_response.create.call_count == 1
+    assert tools.run.await_count == 1
+    assert result[-1]["content"][0]["tool_use_id"] == "step"
+    assert "tool turn limit" in str(callback.call_args.args[2])
+
+
+@pytest.mark.parametrize("limit", [0, -1, True, 1.5])
+async def test_tool_loop_rejects_invalid_budgets(limit):
+    with pytest.raises(ValueError, match="positive integer"):
+        await _run_loop_and_get_request_kwargs(max_tool_turns=limit)
 
 
 async def test_loop():

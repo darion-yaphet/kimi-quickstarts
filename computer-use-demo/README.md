@@ -1,5 +1,9 @@
 # Kimi Computer Use Demo
 
+Each user request permits at most 30 model/tool turns. The loop stops with a
+visible error when this budget is exhausted, preserving the completed tool
+results. Python callers can set `max_tool_turns` to another positive limit.
+
 This demo runs Kimi Code in a Linux desktop container. Kimi can inspect
 screenshots, control the mouse and keyboard, run shell commands, and edit files
 through ordinary custom tools.
