@@ -701,6 +701,8 @@ class TestSamplingLoopIntegration:
             )
 
             mock_browser = AsyncMock()
+            mock_browser.name = "browser"
+            mock_browser.to_params = Mock(return_value={"name": "browser"})
             mock_browser.return_value = ToolResult(output="Screenshot taken")
 
             messages = [{"role": "user", "content": "Take a screenshot"}]
@@ -725,6 +727,10 @@ class TestSamplingLoopIntegration:
                 browser_tool=mock_browser
             )
 
+            api_call_args = mock_client.beta.messages.create.call_args_list[0][1]
+            assert api_call_args["tools"]
+            assert tool_outputs["tool_001"].output == "Screenshot taken"
+
             assert len(output_messages) >= 2
             assert any(
                 msg.get("type") == "text" and "help you" in msg.get("text", "")
@@ -733,7 +739,7 @@ class TestSamplingLoopIntegration:
             assert any(msg.get("type") == "tool_use" for msg in output_messages)
 
             assistant_msgs = [m for m in updated_messages if m["role"] == "assistant"]
-            assert len(assistant_msgs) > 0
+            assert len(assistant_msgs) == 2
 
             mixed_assistant = next(
                 message
@@ -831,6 +837,8 @@ class TestSamplingLoopIntegration:
             )
 
             mock_browser = AsyncMock()
+            mock_browser.name = "browser"
+            mock_browser.to_params = Mock(return_value={"name": "browser"})
             mock_browser.return_value = ToolResult(output="Action completed")
 
             messages = [{"role": "user", "content": "Do multiple things"}]
@@ -895,8 +903,15 @@ class TestSamplingLoopIntegration:
                 api_key="test_key"
             )
 
+            mock_anthropic.assert_called_once_with(api_key="test_key", max_retries=4)
             call_args = mock_client.beta.messages.create.call_args[1]
-            assert call_args["tools"]
+            assert call_args["model"] == "claude-sonnet-4-5"
+            assert call_args["max_tokens"] == 8192
+            assert call_args["betas"] == ["prompt-caching-2024-07-31"]
+            assert call_args["system"][0]["cache_control"] == {"type": "ephemeral"}
+            assert [tool["name"] for tool in call_args["tools"]] == ["browser"]
             assert "tool_choice" not in call_args
+            # anthropic>=1.0 removed these sampling parameters from messages.create()
+            assert not {"temperature", "top_p", "top_k"} & call_args.keys()
 
         asyncio.run(run_test())

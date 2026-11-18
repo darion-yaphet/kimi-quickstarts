@@ -81,7 +81,7 @@ A scheduled agent that reads your Slack channels and GitHub pull requests each w
 
 ### Managed Agents: Knowledge Wiki
 
-A deal-room knowledge wiki built with Claude Managed Agents. This project demonstrates how to distill a document corpus once into a versioned memory-store knowledge wiki — using parallel extraction sessions, a resolve pass, and a steered consolidation dream — then answer repeated analyst questions from the wiki with provenance on every fact and a fraction of the per-question token cost of raw-document search. The worked example is a real M&A data room fetched from public SEC EDGAR filings.
+A deal-room knowledge wiki built with Claude Managed Agents. This project demonstrates how to distill a document corpus once into a versioned memory-store knowledge wiki — using one dynamic workflow run that extracts, resolves, and consolidates — then answer repeated analyst questions from the wiki with provenance on every fact and a lower per-question cost than raw-document search. The worked example is a real M&A data room fetched from public SEC EDGAR filings.
 
 [Go to Managed Agents Knowledge Wiki Quickstart](./managed-agents/knowledge-wiki)
 
@@ -108,6 +108,12 @@ A national-park road trip planner built directly on a Claude Managed Agents sess
 A scheduled Sentry triage agent built on Claude Managed Agents. This project demonstrates a deployment that starts a session on a cron schedule with no host process, Sentry's Agent Plugin for guided setup, and a refreshable MCP OAuth credential persisted in a vault for issue triage and Seer root-cause analysis.
 
 [Go to Managed Agents Sentry Quickstart](./managed-agents/sentry)
+
+### Managed Agents: Sentry Autofix
+
+A production error fixed by pull request, with Claude Managed Agents and the Sentry MCP server. This project demonstrates a webhook-driven session per Sentry issue: the agent reads the stack trace and Seer's root cause analysis, reproduces the bug with a failing test in a mounted GitHub repository, and pushes a branch, and the host opens the pull request through a custom tool so a person reviews every fix. Setup runs in Claude Code with Sentry's Agent Plugin. Credentials stay in a vault outside the sandbox, the sandbox has no route to the open internet, and each session has a hard spend cap.
+
+[Go to Managed Agents Sentry Autofix Quickstart](./managed-agents/sentry-autofix)
 
 ### Managed Agents: Slack
 

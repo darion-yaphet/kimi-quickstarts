@@ -21,6 +21,7 @@ _PROFILE_RESPONSES = {
     "roadtrip-planner": "I would draft a route from the supplied constraints and flag facts needing live data.",
     "self-hosted-sandboxes": "I would describe the requested Python task without executing it.",
     "sentry": "I would triage the supplied error data by likely user impact.",
+    "sentry-autofix": "I would analyze the supplied stack trace and draft a minimal fix and test plan without pushing code.",
     "slack": "I would draft a helpful reply from the supplied thread context.",
 }
 

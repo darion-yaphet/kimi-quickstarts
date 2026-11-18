@@ -96,7 +96,7 @@ Promise.resolve(pending).then(() => {
             self.assertFalse(report["sandbox"]["available"])
             # Reopening preserves each session and its actual event history.
             runtime = _runtime(str(database), demo=True)
-            self.assertEqual(len(runtime.store.list_sessions()), 13)
+            self.assertEqual(len(runtime.store.list_sessions()), 14)
             self.assertEqual(len(runtime.store.events(knowledge["session_id"])), 2)
 
     def test_demo_defaults_to_separate_database_even_with_live_environment(self):

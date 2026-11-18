@@ -45,8 +45,12 @@ From this foundation, you can add domain-specific tools, optimize performance, o
 
 - Python 3.10+
 - Kimi Code API key (set as `ANTHROPIC_API_KEY`)
-- `anthropic` Python library, 1.0 or later
-- `mcp` Python library
+- `anthropic` Python library, 2.0 or later
+- `mcp` Python library, 2.0 or later
+
+```bash
+pip install "anthropic>=2.0.0,<3" "mcp>=2.0"
+```
 
 Copy `.env.example` values into your shell or preferred environment loader:
 

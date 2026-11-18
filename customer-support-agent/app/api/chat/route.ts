@@ -5,7 +5,7 @@ import type { RAGSource } from "@/app/lib/utils";
 import crypto from "crypto";
 import customerSupportCategories from "@/app/lib/customer_support_categories.json";
 
-const anthropic = new Anthropic({
+const client = new Anthropic({
   apiKey: process.env.KIMI_API_KEY || process.env.ANTHROPIC_API_KEY,
   baseURL: process.env.KIMI_BASE_URL || process.env.ANTHROPIC_BASE_URL || "https://api.kimi.com/coding/",
 });
@@ -212,17 +212,18 @@ export async function POST(req: Request) {
     console.log(`🚀 Query Processing`);
     measureTime("Kimi Generation Start");
 
-    const anthropicMessages = messages.map((msg: any) => ({
-      role: msg.role,
-      content: msg.content,
-    }));
+    const anthropicMessages: Anthropic.MessageParam[] = messages.map(
+      (msg: any) => ({
+        role: msg.role,
+        content: msg.content,
+      }),
+    );
 
-    const response = await anthropic.messages.create({
+    const response = await client.messages.create({
       model: model || process.env.KIMI_MODEL || process.env.ANTHROPIC_MODEL || "kimi-for-coding",
       max_tokens: 4096,
       messages: anthropicMessages,
       system: systemPrompt,
-      temperature: 0.3,
     });
 
     measureTime("Kimi Generation Complete");

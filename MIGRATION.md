@@ -39,11 +39,12 @@ the per-profile capability matrix and implemented local endpoints.
 
 The original `assistant-ui`, Chat SDK, CopilotKit/AG-UI and road-trip interfaces
 still need local session adapters and streaming/tool-rendering support. Slack,
-Linear and Sentry integrations still need their connectors and request/OAuth
-handling. Knowledge ingestion/provenance, local scheduling and isolated Docker
-execution now have working local replacements; see
+Linear, Sentry and Sentry Autofix integrations still need their connectors and
+request/OAuth handling. Knowledge ingestion/provenance, local scheduling and
+isolated Docker execution now have working local replacements; see
 [LOCAL_RUNTIME.md](managed-agents/LOCAL_RUNTIME.md). External brief delivery,
-semantic wiki synthesis and original multi-cloud sandbox adapters remain.
+dynamic workflow wiki synthesis and original multi-cloud/OpenShell policy
+sandbox adapters remain.
 Kimi does not provide Anthropic's
 hosted Agents, Sessions, Vaults or Dreams APIs by changing a base URL.
 

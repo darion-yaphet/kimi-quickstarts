@@ -342,6 +342,9 @@ with `input.action`, which is the explicit tool's own shape.
 `cfg.provider` selects the API surface: `"kimi"` (default, Anthropic-compatible
 Messages endpoint), `"anthropic"` (first-party), `"vertex"` (Google Cloud),
 or `"bedrock"` (AWS). See `.env.example` for endpoint and credential settings.
+Vertex and Bedrock also need the SDK's optional dependencies, which
+`requirements.txt` does not include: `pip install "anthropic[vertex]"` or
+`pip install "anthropic[bedrock]"`.
 
 Vertex and Bedrock impose a request-body size cap that the first-party API
 does not. The demo enforces a conservative threshold (18 MB on Vertex, 11 MB

@@ -131,6 +131,15 @@ PROFILES = {
             "Add Seer integration separately if licensed",
         ),
         _profile(
+            "sentry-autofix",
+            "Draft root-cause analysis and fix plans from supplied Sentry issue data",
+            "Analyze supplied stack traces and error reports, propose minimal fixes and reproduction tests, and never claim to have pushed branches or opened pull requests.",
+            "Local issue analysis is ready; Sentry webhooks/MCP, repository mounting, and GitHub PR creation are not connected.",
+            "Implement signed Sentry webhook receiver and MCP/Seer read connector",
+            "Mount target repository into an isolated sandbox with test execution",
+            "Add an explicit host-controlled GitHub branch push and pull-request tool",
+        ),
+        _profile(
             "slack",
             "Draft helpful Slack replies",
             "Draft a reply from supplied thread context. Never claim to have posted it.",

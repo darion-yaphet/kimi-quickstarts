@@ -24,7 +24,7 @@ session's token, piped to it over stdin.
 ## How to use it
 
 Needs Docker 28 or later, `jq` 1.6 or later, the [`ant` CLI](https://platform.claude.com/docs/en/cli-sdks-libraries/cli/quickstart)
-1.30 or later (`brew install anthropics/tap/ant`), `ant auth login` once (or
+2.0 or later (`brew install anthropics/tap/ant`), `ant auth login` once (or
 `ANTHROPIC_API_KEY` exported in your shell), and OpenShell. OpenShell runs on
 Linux 6.2 or later with the
 [Landlock](https://docs.kernel.org/security/landlock.html) kernel feature
@@ -263,6 +263,30 @@ within_boundary` and exits 0. It exits 3 when it cannot decide, so treat
 anything but 0 as drift. The prover compares two policies. It says nothing
 about what an agent did.
 
+### Policy hooks
+
+One `policy.yaml` for every session is where this demo stops. To decide each
+session's policy instead, set `ON_WORK_HOOK` to a program of yours before
+`./start.sh`. `on-work.sh` then calls it at four points, with the poller's
+IDs in its environment and the environment key already gone:
+
+| Call | When | Its answer |
+|---|---|---|
+| `admit` | Before anything is created. The session token is on its stdin, to read the session with. | Exit non-zero to refuse the session. Print extra sandbox labels, one `key=value` per line. Later calls get them in `ON_WORK_LABELS`. |
+| `policy <file>` | When the session needs a new sandbox, in place of filling in `policy.yaml` | Write the sandbox's policy to `<file>`. Exit non-zero and no sandbox is created. |
+| `verify <file>` | Before a stopped sandbox is restarted or a running one reused, and right after a new one is created. `<file>` holds the policy the gateway reports for it. | 0: use it. 1: delete it and make a new one, `/workspace` included (a new sandbox that gets this answer refuses the session instead). Anything else refuses the session. |
+| `start` | Just before the worker starts | Exit non-zero to refuse the session. |
+
+While a hook decides, `on-work.sh` holds a lock per session (`flock`, under
+`ON_WORK_LOCK_DIR`), so a redelivered work item cannot replace a sandbox
+that another run is starting a worker in. Three more variables go with a
+hook: `SANDBOX_BASE_URL`, the API as the sandbox reaches it (default
+`ANTHROPIC_BASE_URL`), `SANDBOX_MAX_IDLE` (default `60s`), and
+`SANDBOX_APP_LABEL` (default `shs-openshell`).
+[`../openshell-policy/`](../openshell-policy/) is a hook that grows,
+promotes and shrinks each kind of agent's policy inside a signed ceiling,
+with the prover deciding every change.
+
 ## How it works
 
 | | |
@@ -285,8 +309,8 @@ that session's worker. Each sandbox holds only a token
 The token arrives inside the work item's `secret`, which bundles it with other
 tokens the worker does not use. `on-work.sh` keeps the one, drops the rest,
 and `ant beta:worker run` reads the result from `--work-secret-file
-/dev/stdin`. That flag needs `ant` 1.32 or later in the image, and the
-`Dockerfile` pins 1.38.0. The token is never in a file, on a command line, in
+/dev/stdin`. The `ant` that reads it is the copy in the image, which the
+`Dockerfile` pins at 2.0.0. The token is never in a file, on a command line, in
 the sandbox definition the gateway stores, or in the worker's environment.
 
 An agent with skills runs without them here: the policy has no route for the

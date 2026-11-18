@@ -9,7 +9,7 @@ adapters are migrated.
 ## Local Kimi migration
 
 For a runnable example without API keys, cloud accounts, Docker, or extra Python
-packages, run `python3 kimi.py demo` from this directory. It exercises all eleven
+packages, run `python3 kimi.py demo` from this directory. It exercises all twelve
 profiles with local fixtures, real SQLite sessions, retrieval and scheduling,
 and clearly marked simulated replies. Run `python3 kimi.py --demo --serve` for
 the browser version. See [SIMULATION.md](SIMULATION.md) for the replacement
@@ -116,12 +116,11 @@ successful partial replies.
   credential the sandbox never sees.
 
 - **[knowledge-wiki/](knowledge-wiki/)** distills a document corpus
-  once into a knowledge wiki (a versioned memory store) using
-  parallel extraction sessions, a resolve pass, and a steered
-  consolidation dream (research-preview `client.beta.dreams`), then
-  answers repeated analyst questions from the wiki instead of
-  re-reading documents — with `[source | as-of]` provenance on every
-  fact and a fraction of the per-question token cost. The worked
+  once into a knowledge wiki (a versioned memory store) using one
+  dynamic workflow run (extractors, a resolver, analyzers, an
+  organizer), then answers repeated analyst questions from the wiki
+  instead of re-reading documents — with `[source | as-of]` provenance
+  on every fact and a lower per-question cost. The worked
   example is a real M&A data room: the 2024 Squarespace / Permira
   take-private, fetched from public SEC EDGAR filings.
 
@@ -183,6 +182,18 @@ successful partial replies.
   project, and a browser OAuth grant lands in a vault as a refreshable
   `mcp_oauth` credential that Anthropic injects on the MCP connection
   and refreshes; the sandbox never holds a token.
+
+- **[sentry-autofix/](sentry-autofix/)** turns a new Sentry issue into
+  a pull request. A signed Sentry webhook starts one session per issue.
+  The agent reads the stack trace and Seer's root cause analysis
+  through the Sentry MCP server (an `mcp_oauth` vault credential),
+  reproduces the bug with a failing test in the mounted repository,
+  and pushes a branch. The host opens the pull request through a
+  custom tool, so the repository, the base branch, and the
+  `Fixes SHOP-1A` link are never the agent's to choose, and it takes
+  away the session's push access once the pull request is open. Setup
+  runs inside Claude Code with Sentry's Agent Plugin to pick the org
+  and project.
 
 - **[slack/](slack/)** answers `@mentions` in Slack with a threaded
   reply, over a stateless Bun webhook bridge. The Slack event creates

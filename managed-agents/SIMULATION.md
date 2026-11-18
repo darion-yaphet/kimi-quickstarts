@@ -11,7 +11,7 @@ cd managed-agents
 python3 kimi.py demo
 ```
 
-程序读取 `demo-fixtures/scenarios.json` 中的 11 个场景及 `demo-fixtures/product.md` 中的虚构产品资料，创建会话、检索资料、运行一次简报定时任务，并将旅行草稿传给第二个模拟角色。
+程序读取 `demo-fixtures/scenarios.json` 中的 12 个场景及 `demo-fixtures/product.md` 中的虚构产品资料，创建会话、检索资料、运行一次简报定时任务，并将旅行草稿传给第二个模拟角色。
 
 输出包含数据库路径、每个场景的会话 ID、模拟回复、引用来源、调度运行记录和审阅结果。结果文件默认为 `.kimi/demo-results.json`，数据库默认为 `.kimi/demo.db`；二者均被 Git 忽略。
 
@@ -26,7 +26,7 @@ python3 kimi.py --db .kimi/my-demo.db demo --output .kimi/my-demo-results.json
 
 | 原始模块或服务 | 本例的替代方式 | 实际效果 |
 | --- | --- | --- |
-| 托管 Agents 配置 | 11 个本地 profile | 真实读取配置；无需创建云端智能体 |
+| 托管 Agents 配置 | 12 个本地 profile | 真实读取配置；无需创建云端智能体 |
 | Sessions 和消息历史 | SQLite 会话、事件表 | 真实持久化，可重启后回放 |
 | 知识库和记忆存储 | 本地文件、词项索引和引用 ID | 真实导入、检索和来源记录；不做语义蒸馏 |
 | 云端调度 | SQLite 一次性及间隔任务 | 真实执行本地调度，生成模拟回复 |

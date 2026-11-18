@@ -59,6 +59,7 @@ class RuntimeTests(unittest.TestCase):
                 "roadtrip-planner",
                 "self-hosted-sandboxes",
                 "sentry",
+                "sentry-autofix",
                 "slack",
             },
         )

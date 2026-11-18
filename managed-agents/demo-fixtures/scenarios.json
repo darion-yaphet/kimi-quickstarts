@@ -9,5 +9,6 @@
   {"profile":"roadtrip-planner","title":"旅行草稿示例","message":"请列出本地素材中的两天旅行行程，并指出实时地图和天气信息缺失。"},
   {"profile":"self-hosted-sandboxes","title":"执行边界示例","message":"演示 Python 任务：print(1 + 1)。离线模式只保存请求，不执行代码。"},
   {"profile":"sentry","title":"模拟 Sentry 事件","message":"[模拟 Sentry 事件 DEMO-001] TimeoutError，上传请求超时。请列出本地故障记录以便人工排查。"},
+  {"profile":"sentry-autofix","title":"模拟 Sentry 自动修复","message":"[模拟 Sentry Issue DEMO-002] checkout.js 空指针异常。请根据本地故障记录起草修复方案与测试计划，不执行代码推送。"},
   {"profile":"slack","title":"模拟 Slack 线程","message":"[模拟 Slack #support / thread-demo-001] 用户询问星河笔记退款期限。请起草答复，仅输出到本地。"}
 ]

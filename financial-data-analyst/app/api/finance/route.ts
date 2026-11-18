@@ -4,8 +4,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { ChartData } from "@/types/chart";
 
 // Kimi Code exposes an Anthropic-compatible Messages endpoint.
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY!,
+const client = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
   baseURL:
     process.env.ANTHROPIC_BASE_URL || "https://api.kimi.com/coding/",
 });
@@ -183,17 +183,7 @@ const validateChartData = (input: unknown): ChartToolResponse => {
   return chartData as unknown as ChartToolResponse;
 };
 
-interface ToolSchema {
-  name: string;
-  description: string;
-  input_schema: {
-    type: "object";
-    properties: Record<string, unknown>;
-    required: string[];
-  };
-}
-
-const tools: ToolSchema[] = [
+const tools: Anthropic.Tool[] = [
   {
     name: "generate_graph_data",
     description:
@@ -320,7 +310,9 @@ export async function POST(req: NextRequest) {
     }
 
     // Convert all previous messages
-    let anthropicMessages = messages.map(serializeMessageForModel);
+    let anthropicMessages: Anthropic.MessageParam[] = messages.map(
+      serializeMessageForModel,
+    );
 
     // Handle file in the latest message
     if (fileData) {
@@ -400,7 +392,7 @@ export async function POST(req: NextRequest) {
       ),
     });
 
-    const response = await anthropic.messages.create({
+    const response = await client.messages.create({
       model,
       max_tokens: 4096,
       tools: tools,
@@ -534,12 +526,14 @@ Focus on clear financial insights and let the visualization enhance understandin
         : "No tool used",
     });
 
-    const toolUseContent = response.content.find((c) => c.type === "tool_use");
-    const textContent = response.content.find((c) => c.type === "text");
+    const toolUseContent = response.content.find(
+      (c): c is Anthropic.ToolUseBlock => c.type === "tool_use",
+    );
+    const textContent = response.content.find(
+      (c): c is Anthropic.TextBlock => c.type === "text",
+    );
 
-    const processToolResponse = (toolUseContent: any) => {
-      if (!toolUseContent) return null;
-
+    const processToolResponse = (toolUseContent: Anthropic.ToolUseBlock) => {
       const chartData = validateChartData(toolUseContent.input);
 
       // Transform data for pie charts to match expected structure

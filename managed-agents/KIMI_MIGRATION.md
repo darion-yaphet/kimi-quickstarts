@@ -12,7 +12,7 @@ Kimi does not provide.
 - Persistent local sessions with `idle`, `running`, and `error` state
 - Append-only user, assistant, and error events
 - Conversation replay after process restart
-- Eleven purpose-specific profiles
+- Twelve purpose-specific profiles
 - Interactive CLI, one-shot CLI, and a JSON HTTP API
 - Dependency-free browser UI at `/` for profiles, sessions, history, and chat
 - Serialized turns within one process for each session
@@ -56,12 +56,13 @@ scheduling controls.
 | `chat-sdk` | Research-style conversation | Chat SDK adapter, reviewed search, streaming |
 | `copilot-kit-ag-ui` | Finance conversation | AG-UI adapter and interactive chart actions |
 | `daily-brief` | Scheduled brief generation with local knowledge | GitHub/Slack readers, opt-in delivery |
-| `knowledge-wiki` | Local ingestion, indexed retrieval and source citations | Optional semantic wiki synthesis/conflict resolution |
+| `knowledge-wiki` | Local ingestion, indexed retrieval and source citations | Dynamic multi-agent workflow synthesis/conflict resolution |
 | `linear` | Issue-response drafting | OAuth, signed webhooks, thread routing, explicit posting |
 | `mcp-server-typescript` | General session service | Local MCP tool implementation and auth/allowlists |
 | `roadtrip-planner` | Constraint-based planning | UI adapter, maps/places data, reviewer workflow |
-| `self-hosted-sandboxes` | Persisted Python jobs, Docker execution, limits and audit | Original multi-cloud provider adapters and remote worker authentication |
+| `self-hosted-sandboxes` | Persisted Python jobs, Docker execution, limits and audit | Original multi-cloud/OpenShell policy adapters and remote worker authentication |
 | `sentry` | Scheduled triage from supplied events | Sentry auth/read connector, optional Seer |
+| `sentry-autofix` | Root-cause and fix-plan drafting from supplied events | Signed webhooks, Sentry MCP/Seer, repo sandbox mount, host GitHub PR tool |
 | `slack` | Thread-reply drafting | OAuth, signed events, thread routing, explicit posting |
 
 Run `python kimi.py --profile <name> --status` for the same information in

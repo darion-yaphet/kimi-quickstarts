@@ -23,7 +23,7 @@ A Next.js application that combines Kimi Code with interactive data visualizatio
 
 ### Prerequisites
 
-- Node.js 18+ installed
+- Node.js 20+ installed (required by `@anthropic-ai/sdk` v1)
 - Kimi Code API key
 
 ### Installation
@@ -66,7 +66,7 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 - **Backend**:
   - Next.js API Routes
   - Edge Runtime
-  - Anthropic SDK pointed at Kimi Code's compatible endpoint
+  - Anthropic TypeScript SDK (`@anthropic-ai/sdk` v1.x) pointed at Kimi Code's compatible endpoint
 
 For overseas accounts, set `ANTHROPIC_BASE_URL` to
 `https://api.kimi.ai/coding/`. `NEXT_PUBLIC_ANTHROPIC_MODEL` controls the
